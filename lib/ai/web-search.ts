@@ -152,16 +152,14 @@ export const searchWeb = async (
       })
     }
 
-    normalized.sort((a, b) => {
+    return normalized.toSorted((a, b) => {
       const aTs = getPublishedTimestamp(a.publishedDate)
       const bTs = getPublishedTimestamp(b.publishedDate)
       return bTs - aTs
     })
-
-    return normalized
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Tavily request timed out')
+      throw new Error('Tavily request timed out', { cause: error })
     }
     throw error
   } finally {

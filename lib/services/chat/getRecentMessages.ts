@@ -27,7 +27,7 @@ export const getRecentMessages = async (
     const userProfiles = await userService.getUserProfiles(userIds)
 
     return await Promise.all(
-      messages.reverse().map(async (msg: DatabaseMessage) => {
+      messages.toReversed().map(async (msg: DatabaseMessage) => {
         const userProfile = userProfiles.get(msg.user_id)
         const userName = await getUserDisplayNameById(supabase, msg.user_id)
         return transformDatabaseMessage(msg, userProfile?.avatar_url, userName)

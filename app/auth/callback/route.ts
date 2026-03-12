@@ -21,8 +21,9 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const { supabase, headers } = createClient(request)
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error && data.session) {
+    const { data, error: exchangeError } =
+      await supabase.auth.exchangeCodeForSession(code)
+    if (!exchangeError && data.session) {
       const response = NextResponse.redirect(`${origin}${next}`)
       // Apply any cookie changes
       headers.forEach((value, key) => {

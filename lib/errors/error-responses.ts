@@ -23,16 +23,16 @@ export function errorResponse(
 ): NextResponse<ErrorResponse> {
   const errorDef = ERROR_DEFINITIONS[errorCode]
 
-  const errorResponse: ErrorResponse = {
+  const body: ErrorResponse = {
     error: errorDef.message,
     code: errorDef.code
   }
 
   if (details !== undefined) {
-    errorResponse.details = details
+    body.details = details
   }
 
-  return NextResponse.json(errorResponse, { status: errorDef.statusCode })
+  return NextResponse.json(body, { status: errorDef.statusCode })
 }
 
 /**
@@ -49,16 +49,16 @@ export function plainErrorResponse(
 ): Response {
   const errorDef = ERROR_DEFINITIONS[errorCode]
 
-  const errorResponse: ErrorResponse = {
+  const body: ErrorResponse = {
     error: errorDef.message,
     code: errorDef.code
   }
 
   if (details !== undefined) {
-    errorResponse.details = details
+    body.details = details
   }
 
-  return new Response(JSON.stringify(errorResponse), {
+  return new Response(JSON.stringify(body), {
     status: errorDef.statusCode,
     headers: { 'Content-Type': 'application/json' }
   })
@@ -80,16 +80,16 @@ export function customErrorResponse(
   code?: string,
   details?: unknown
 ): NextResponse<ErrorResponse> {
-  const errorResponse: ErrorResponse = {
+  const body: ErrorResponse = {
     error: message,
     code: code || 'CUSTOM_ERROR'
   }
 
   if (details !== undefined) {
-    errorResponse.details = details
+    body.details = details
   }
 
-  return NextResponse.json(errorResponse, { status: statusCode })
+  return NextResponse.json(body, { status: statusCode })
 }
 
 /**

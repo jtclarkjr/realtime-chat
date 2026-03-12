@@ -86,15 +86,16 @@ export const ChatMessageList = forwardRef<HTMLDivElement, ChatMessageListProps>(
           aria-live="polite"
           onScroll={handleCombinedScroll}
         >
-          {loading && filteredMessages.length === 0 ? (
+          {loading && filteredMessages.length === 0 && (
             <div className="py-2 sm:py-4" aria-label="Loading chat messages">
               <MessageListSkeleton />
             </div>
-          ) : !loading && filteredMessages.length === 0 ? (
+          )}
+          {!loading && filteredMessages.length === 0 && (
             <div className="text-center text-sm text-muted-foreground py-8">
               <div>No messages yet. Start the conversation!</div>
             </div>
-          ) : null}
+          )}
           {filteredMessages.length > 0 && (
             <>
               {enableVirtualization && !shouldFallbackToStandardList ? (

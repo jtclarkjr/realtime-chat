@@ -31,7 +31,7 @@ export function NotificationDropdown({
   // Get rooms with unread messages
   const unreadRooms = rooms
     .filter((room) => (unreadCounts[room.id] || 0) > 0)
-    .sort((a, b) => (unreadCounts[b.id] || 0) - (unreadCounts[a.id] || 0))
+    .toSorted((a, b) => (unreadCounts[b.id] || 0) - (unreadCounts[a.id] || 0))
 
   const readRoomList = readRooms
     .map((roomId) => rooms.find((room) => room.id === roomId))

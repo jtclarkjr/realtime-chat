@@ -35,7 +35,7 @@ export function RecentRooms({ initialRooms }: RecentRoomsProps) {
   // Sort rooms by:
   // 1. Recent rooms (from UI store) come first, in order of recency
   // 2. Then remaining rooms sorted by last message timestamp
-  const sortedRooms = [...roomsWithMessages].sort((a, b) => {
+  const sortedRooms = [...roomsWithMessages].toSorted((a, b) => {
     const aRecentIndex = recentRooms.indexOf(a.id)
     const bRecentIndex = recentRooms.indexOf(b.id)
 

@@ -31,7 +31,7 @@ export const sendMessage = async (
     message = await insertMessage(messageInsert)
   } catch (error) {
     console.error('Error saving message to database:', error)
-    throw new Error('Failed to save message')
+    throw new Error('Failed to save message', { cause: error })
   }
 
   // Get username from auth.users

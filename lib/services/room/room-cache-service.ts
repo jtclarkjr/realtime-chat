@@ -41,7 +41,7 @@ export class RoomCacheService {
     } catch (error) {
       console.error('Error stringifying data for cache:', error)
       console.error('Data that failed to stringify:', data)
-      throw new Error(`Failed to stringify data for cache: ${error}`)
+      throw new Error('Failed to stringify data for cache', { cause: error })
     }
   }
 

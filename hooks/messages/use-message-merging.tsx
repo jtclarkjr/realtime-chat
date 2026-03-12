@@ -102,7 +102,7 @@ export function useMessageMerging({
     const uniqueMessages = Array.from(messageById.values())
 
     // Sort by creation date with null checks
-    const sortedMessages = uniqueMessages.sort((a, b) => {
+    const sortedMessages = uniqueMessages.toSorted((a, b) => {
       const timeA = a.createdAt ? Date.parse(a.createdAt) : fallbackTime
       const timeB = b.createdAt ? Date.parse(b.createdAt) : fallbackTime
       return timeA - timeB

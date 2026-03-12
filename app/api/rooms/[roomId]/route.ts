@@ -22,7 +22,10 @@ export const GET = withAuth(
       const room = await roomCacheService.getRoomById(roomId)
 
       if (!room) {
-        return NextResponse.json({ error: 'Channel not found' }, { status: 404 })
+        return NextResponse.json(
+          { error: 'Channel not found' },
+          { status: 404 }
+        )
       }
 
       return NextResponse.json({ room })

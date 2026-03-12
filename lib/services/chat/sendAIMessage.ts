@@ -37,7 +37,7 @@ export const sendAIMessage = async (
     message = await insertMessage(aiMessageInsert)
   } catch (error) {
     console.error('Error saving AI message to database:', error)
-    throw new Error('Failed to save AI message')
+    throw new Error('Failed to save AI message', { cause: error })
   }
 
   // For AI messages, use a stable fallback if no display name is set

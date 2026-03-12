@@ -49,7 +49,7 @@ const mergeMessages = (
     }
   })
 
-  return Array.from(merged.values()).sort(
+  return Array.from(merged.values()).toSorted(
     (a, b) =>
       new Date(a.createdAt || 0).getTime() -
       new Date(b.createdAt || 0).getTime()

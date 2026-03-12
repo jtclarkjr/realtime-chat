@@ -277,7 +277,7 @@ export function useRealtimeChat({
 
     // Convert back to array and sort by creation date
     const uniqueMessages = Array.from(messageMap.values())
-    return uniqueMessages.sort(
+    return uniqueMessages.toSorted(
       (a, b) =>
         new Date(a.createdAt || 0).getTime() -
         new Date(b.createdAt || 0).getTime()

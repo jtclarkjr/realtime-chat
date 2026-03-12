@@ -120,17 +120,17 @@ export function LoginClient() {
         setLoading(null)
       }, 1500)
 
-      const { error } = await signIn()
+      const { error: signInError } = await signIn()
 
       // Clear timeout if we get here (error case)
       clearTimeout(timeoutId)
 
-      if (error) {
-        console.error(`Error signing in with ${provider}:`, error)
+      if (signInError) {
+        console.error(`Error signing in with ${provider}:`, signInError)
         setLoading(null)
       }
-    } catch (error) {
-      console.error(`Error signing in with ${provider}:`, error)
+    } catch (err) {
+      console.error(`Error signing in with ${provider}:`, err)
       setLoading(null)
     }
   }
@@ -162,9 +162,9 @@ export function LoginClient() {
       }
 
       // No existing session, create new anonymous user
-      const { error } = await signInAnonymously()
-      if (error) {
-        console.error('Error signing in anonymously:', error)
+      const { error: anonError } = await signInAnonymously()
+      if (anonError) {
+        console.error('Error signing in anonymously:', anonError)
         setError('Failed to sign in as guest. Please try again.')
         setLoading(null)
       } else {

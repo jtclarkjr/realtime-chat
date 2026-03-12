@@ -59,7 +59,7 @@ export const getMissedMessages = async (
 
       // Transform and reverse to get chronological order
       const transformedMessages = await Promise.all(
-        recentMessages.reverse().map(async (msg: DatabaseMessage) => {
+        recentMessages.toReversed().map(async (msg: DatabaseMessage) => {
           const userProfile = userProfiles.get(msg.user_id)
           const userName = await getUserDisplayNameById(supabase, msg.user_id)
           return transformDatabaseMessage(
@@ -136,7 +136,7 @@ export const getMissedMessages = async (
           await userService.getUserProfiles(recentUserIds)
 
         const recentTransformed = await Promise.all(
-          recentMessages.reverse().map(async (msg: DatabaseMessage) => {
+          recentMessages.toReversed().map(async (msg: DatabaseMessage) => {
             const userProfile = recentUserProfiles.get(msg.user_id)
             const userName = await getUserDisplayNameById(supabase, msg.user_id)
             return transformDatabaseMessage(

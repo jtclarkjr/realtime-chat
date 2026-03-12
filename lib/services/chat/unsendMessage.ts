@@ -29,10 +29,11 @@ export const unsendMessage = async (
       errorWithCode?.message?.includes('No rows found')
     ) {
       throw new Error(
-        'Message not found or you do not have permission to unsend it'
+        'Message not found or you do not have permission to unsend it',
+        { cause: error }
       )
     }
-    throw new Error('Failed to unsend message')
+    throw new Error('Failed to unsend message', { cause: error })
   }
 
   if (!updatedMessage) {

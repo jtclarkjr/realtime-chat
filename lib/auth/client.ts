@@ -69,13 +69,13 @@ export async function getCurrentUser() {
   return { user, error }
 }
 
+const isAuthKey = (key: string) =>
+  /^sb-.*auth-token/i.test(key) ||
+  /^sb-.*code-verifier/i.test(key) ||
+  /^supabase-auth/i.test(key)
+
 export function signOutViaLogoutRoute() {
   if (typeof window === 'undefined') return
-
-  const isAuthKey = (key: string) =>
-    /^sb-.*auth-token/i.test(key) ||
-    /^sb-.*code-verifier/i.test(key) ||
-    /^supabase-auth/i.test(key)
 
   for (let i = window.localStorage.length - 1; i >= 0; i--) {
     const key = window.localStorage.key(i)

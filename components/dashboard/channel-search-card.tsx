@@ -29,7 +29,7 @@ export function ChannelSearchCard({
   const options = useMemo(
     () =>
       [...rooms]
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .toSorted((a, b) => a.name.localeCompare(b.name))
         .map((room) => ({
           value: room.id,
           label: room.name,

@@ -102,7 +102,7 @@ const extractTrailingSources = (markdown: string): ParsedContent => {
   }
 
   const sourceLines = sourceLineIndexes
-    .sort((a, b) => a - b)
+    .toSorted((a, b) => a - b)
     .map((index) => lines[index].replace(SOURCES_PREFIX_REGEX, ''))
 
   const seen = new Set<string>()
@@ -136,7 +136,7 @@ const extractTrailingSources = (markdown: string): ParsedContent => {
     return { bodyMarkdown: markdown, sources: [] }
   }
 
-  for (const index of sourceLineIndexes.sort((a, b) => b - a)) {
+  for (const index of sourceLineIndexes.toSorted((a, b) => b - a)) {
     lines.splice(index, 1)
   }
   const bodyMarkdown = lines.join('\n').replace(/\n+$/, '')

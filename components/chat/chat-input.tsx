@@ -7,6 +7,22 @@ import { Textarea } from '@/components/ui/textarea'
 import { AIBadge } from '@/components/ui/ai-badge'
 import { Send } from 'lucide-react'
 
+const getPlaceholderText = (
+  isLoading: boolean,
+  isAILoading: boolean,
+  isAIEnabled: boolean,
+  isConnected: boolean,
+  isAnonymous: boolean
+): string => {
+  if (isLoading) return 'Loading messages...'
+  if (isAnonymous) return 'Sign in to send messages...'
+  if (isAILoading) return 'AI is responding...'
+  if (!isConnected && !isLoading)
+    return isAIEnabled ? 'Ask AI (offline)...' : 'Type message (offline)...'
+  if (isAIEnabled) return 'Ask AI assistant...'
+  return 'Type a message...'
+}
+
 interface ChatInputProps {
   newMessage: string
   setNewMessage: (message: string) => void
@@ -49,22 +65,6 @@ export const ChatInput = ({
   useEffect(() => {
     autoResize()
   }, [newMessage])
-
-  const getPlaceholderText = (
-    loading: boolean,
-    isAILoading: boolean,
-    isAIEnabled: boolean,
-    isConnected: boolean,
-    isAnonymous: boolean
-  ): string => {
-    if (loading) return 'Loading messages...'
-    if (isAnonymous) return 'Sign in to send messages...'
-    if (isAILoading) return 'AI is responding...'
-    if (!isConnected && !loading)
-      return isAIEnabled ? 'Ask AI (offline)...' : 'Type message (offline)...'
-    if (isAIEnabled) return 'Ask AI assistant...'
-    return 'Type a message...'
-  }
 
   const inputDisabled = loading || isAILoading || isAnonymous
 

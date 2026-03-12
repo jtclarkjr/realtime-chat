@@ -26,7 +26,7 @@ export function PresenceAvatars({
   }
 
   // Sort: current user first, then alphabetically
-  const sortedUsers = [...users].sort((a, b) => {
+  const sortedUsers = [...users].toSorted((a, b) => {
     if (a.id === currentUserId) return -1
     if (b.id === currentUserId) return 1
     return a.name.localeCompare(b.name)

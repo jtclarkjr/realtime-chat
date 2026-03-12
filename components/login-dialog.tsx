@@ -104,16 +104,16 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
         setLoading(null)
       }, 1500)
 
-      const { error } = await signIn()
+      const { error: signInError } = await signIn()
 
       clearTimeout(timeoutId)
 
-      if (error) {
-        console.error(`Error signing in with ${provider}:`, error)
+      if (signInError) {
+        console.error(`Error signing in with ${provider}:`, signInError)
         setLoading(null)
       }
-    } catch (error) {
-      console.error(`Error signing in with ${provider}:`, error)
+    } catch (err) {
+      console.error(`Error signing in with ${provider}:`, err)
       setLoading(null)
     }
   }
