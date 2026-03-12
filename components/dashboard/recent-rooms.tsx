@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { Hash, ArrowRight, Bot } from 'lucide-react'
+import { ArrowRight, Bot } from 'lucide-react'
 import { useUIStore } from '@/lib/stores/ui-store'
 import {
   getMissedMessages,
@@ -12,8 +12,10 @@ import {
 } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query'
 import { formatRelativeTime } from '@/lib/utils/format-time'
-import type { RoomWithLastMessage } from '@/lib/actions/room-actions'
+import type { RoomWithLastMessage } from '@/lib/actions/navigation-actions'
 import { useAuthenticatedUser } from '@/hooks/use-authenticated-user'
+import { getRoomHref } from '@/lib/utils/chat-routes'
+import { ConversationIcon } from '@/components/layout/conversation-icon'
 
 interface RecentRoomsProps {
   initialRooms: RoomWithLastMessage[]
@@ -64,16 +66,15 @@ export function RecentRooms({ initialRooms }: RecentRoomsProps) {
         <h2 className="text-xl font-semibold">Recent chats</h2>
         <div className="text-center py-8 text-muted-foreground">
           <p>No recent chats yet.</p>
-          <p className="text-sm mt-2">
-            Start a conversation in a room to see it here!
-          </p>
+          <p className="text-sm mt-2">Start a conversation to see it here.</p>
         </div>
       </div>
     )
   }
 
   const prefetchRoomData = (roomId: string) => {
-    router.prefetch(`/room/${roomId}`)
+    const room = initialRooms.find((entry) => entry.id === roomId)
+    router.prefetch(room ? getRoomHref(room) : `/room/${roomId}`)
 
     void queryClient.prefetchQuery({
       queryKey: queryKeys.rooms.detail(roomId),
@@ -110,13 +111,13 @@ export function RecentRooms({ initialRooms }: RecentRoomsProps) {
           room.lastMessage ? (
             <Link
               key={room.id}
-              href={`/room/${room.id}`}
+              href={getRoomHref(room)}
               onMouseEnter={() => prefetchRoomData(room.id)}
               onFocus={() => prefetchRoomData(room.id)}
               className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-accent transition-colors group"
             >
               <div className="p-2 bg-muted rounded-lg shrink-0">
-                <Hash className="h-5 w-5 text-muted-foreground" />
+                <ConversationIcon room={room} className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium mb-1">{room.name}</div>

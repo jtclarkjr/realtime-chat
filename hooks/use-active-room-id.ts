@@ -1,6 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
+import { getConversationRouteContext } from '@/lib/utils/chat-routes'
 
 /**
  * Hook to get the active room ID from the URL
@@ -8,5 +9,5 @@ import { useParams } from 'next/navigation'
  */
 export function useActiveRoomId(): string | null {
   const params = useParams()
-  return (params?.id as string) || null
+  return getConversationRouteContext(params).roomId
 }

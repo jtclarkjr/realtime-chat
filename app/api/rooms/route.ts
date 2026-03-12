@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { roomCacheService } from '@/lib/services/room/room-cache-service'
-import { ensureDefaultRooms, getRooms } from '@/lib/supabase/db/rooms'
+import { listFlattenedReadableGroupRooms } from '@/lib/services/domain'
 import { withAuth, withNonAnonymousAuth } from '@/lib/auth/middleware'
-import {
-  createRoomSchema,
-  deleteRoomQuerySchema,
-  validateRequestBody,
-  validateQueryParams
-} from '@/lib/validation'
+import { deleteRoomQuerySchema, validateQueryParams } from '@/lib/validation'
+import { errorResponse } from '@/lib/errors'
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_request, { user }) => {
   try {
-    await ensureDefaultRooms()
-    // Always return fresh room list; in-session caching is handled on the client.
-    const rooms = await getRooms()
+    const rooms = await listFlattenedReadableGroupRooms(user)
 
     return NextResponse.json({ rooms })
   } catch (error) {
@@ -26,79 +19,30 @@ export const GET = withAuth(async () => {
 })
 
 export const POST = withNonAnonymousAuth(async (request: NextRequest, auth) => {
-  try {
-    // Validate request body with Zod schema
-    const validation = await validateRequestBody(request, createRoomSchema)
+  void request
+  void auth
+  return errorResponse('VALIDATION_ERROR', [
+    {
+      field: 'root',
+      message:
+        'Legacy room creation is deprecated. Create groups or personal chats instead.'
+    }
+  ])
+})
+
+export const DELETE = withNonAnonymousAuth(
+  async (request: NextRequest, _auth) => {
+    const validation = validateQueryParams(request, deleteRoomQuerySchema)
     if (!validation.success) {
       return validation.response
     }
 
-    const { name, description } = validation.data
-
-    // Use the cache service which handles database creation and cache invalidation
-    const room = await roomCacheService.createRoom({
-      name,
-      description: description || null,
-      created_by: auth.user.id
-    })
-
-    return NextResponse.json({ room })
-  } catch (error) {
-    // Handle specific database errors
-    if (
-      (error instanceof Error && error.message.includes('duplicate key')) ||
-      (error instanceof Error && error.message.includes('unique constraint'))
-    ) {
-      return NextResponse.json(
-        { error: 'A room with this name already exists' },
-        { status: 409 }
-      )
-    }
-
-    console.error('Unexpected error creating room:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
-  }
-})
-
-export const DELETE = withNonAnonymousAuth(
-  async (request: NextRequest, auth) => {
-    try {
-      // Validate query parameters with Zod schema
-      const validation = validateQueryParams(request, deleteRoomQuerySchema)
-      if (!validation.success) {
-        return validation.response
+    return errorResponse('VALIDATION_ERROR', [
+      {
+        field: 'id',
+        message:
+          'Legacy room deletion is deprecated. Delete a group channel or personal chat instead.'
       }
-
-      const { id: roomId } = validation.data
-
-      // Use the cache service which handles database deletion and cache invalidation
-      const success = await roomCacheService.deleteRoom(roomId, auth.user.id)
-
-      if (!success) {
-        return NextResponse.json(
-          { error: 'Channel not found or unauthorized to delete' },
-          { status: 404 }
-        )
-      }
-
-      return NextResponse.json({ success: true })
-    } catch (error) {
-      // Handle specific database errors
-      if (error instanceof Error && error.message.includes('unauthorized')) {
-        return NextResponse.json(
-          { error: 'Unauthorized to delete this room' },
-          { status: 403 }
-        )
-      }
-
-      console.error('Unexpected error deleting room:', error)
-      return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
-      )
-    }
+    ])
   }
 )

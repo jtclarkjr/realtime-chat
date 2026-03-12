@@ -10,7 +10,9 @@ export const hasUpstashConfig = Boolean(
  */
 export const REDIS_CONFIG = {
   url: process.env.REDIS_URL || 'redis://localhost:6379',
-  maxRetriesPerRequest: 3,
+  maxRetriesPerRequest: 1,
   enableReadyCheck: false,
-  lazyConnect: true
+  lazyConnect: true,
+  enableOfflineQueue: false,
+  connectTimeout: 250
 } as const

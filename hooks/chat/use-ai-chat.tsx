@@ -1,9 +1,13 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { streamAIMessage } from '@/lib/api/client'
+import { useAIUsage } from '@/lib/query/queries'
+import { queryKeys } from '@/lib/query/query-keys'
 import { AI_USER_ID } from '@/lib/services/user/ai-user-setup'
 import type { ChatMessage } from '@/lib/types/database'
+import { useAIUsageLock } from './use-ai-usage-lock'
 
 interface UseAIChatProps {
   roomId: string
@@ -12,6 +16,9 @@ interface UseAIChatProps {
   onStreamingMessage: (message: ChatMessage) => void
   onRemoveStreamingMessage?: (messageId: string) => void
   onCompleteMessage: (message: ChatMessage) => void
+  initialAIEnabled?: boolean
+  allowPrivateMessages?: boolean
+  isAnonymous?: boolean
 }
 
 interface UseAIChatReturn {
@@ -20,10 +27,14 @@ interface UseAIChatReturn {
   isAIPrivate: boolean
   setIsAIPrivate: (isPrivate: boolean) => void
   isAILoading: boolean
+  isAILocked: boolean
+  aiUsageNearLimitNotice?: string
+  aiLockReason?: string
   sendAIMessage: (
     content: string,
     previousMessages: ChatMessage[],
-    triggerMessageId?: string
+    triggerMessageId?: string,
+    fileContextId?: string
   ) => Promise<void>
   generateReplyDraft: (params: {
     previousMessages: ChatMessage[]
@@ -44,6 +55,7 @@ interface StreamAIResponseOptions {
     content: string
   }
   customPrompt?: string
+  fileContextId?: string
   draftOnly?: boolean
   onStart?: (messageId: string, user: ChatMessage['user']) => void
   onContent?: (fullContent: string, messageId: string) => void
@@ -60,11 +72,31 @@ export function useAIChat({
   isConnected,
   onStreamingMessage,
   onRemoveStreamingMessage,
-  onCompleteMessage
+  onCompleteMessage,
+  initialAIEnabled = false,
+  allowPrivateMessages = true,
+  isAnonymous = false
 }: UseAIChatProps): UseAIChatReturn {
-  const [isAIEnabled, setIsAIEnabled] = useState<boolean>(false)
+  const queryClient = useQueryClient()
+  const [isAIEnabled, setIsAIEnabled] = useState<boolean>(initialAIEnabled)
   const [isAIPrivate, setIsAIPrivate] = useState<boolean>(false)
   const [isAILoading, setIsAILoading] = useState<boolean>(false)
+  const { data: aiUsage } = useAIUsage({ enabled: !isAnonymous })
+  const { isAILocked, aiUsageNearLimitNotice, aiLockReason } = useAIUsageLock({
+    aiUsage,
+    isAnonymous
+  })
+  const effectiveAIEnabled = isAIEnabled && !isAILocked
+
+  useEffect(() => {
+    setIsAIEnabled(initialAIEnabled)
+  }, [initialAIEnabled, roomId])
+
+  useEffect(() => {
+    if (!allowPrivateMessages) {
+      setIsAIPrivate(false)
+    }
+  }, [allowPrivateMessages, roomId])
 
   const streamAIResponse = useCallback(
     async ({
@@ -73,6 +105,7 @@ export function useAIChat({
       triggerMessageId,
       targetMessage,
       customPrompt,
+      fileContextId,
       draftOnly = false,
       onStart,
       onContent,
@@ -92,8 +125,9 @@ export function useAIChat({
         message: content.trim(),
         responseFormat: 'markdown',
         previousMessages: messageContext,
-        isPrivate: isAIPrivate,
+        isPrivate: allowPrivateMessages ? isAIPrivate : false,
         triggerMessageId,
+        fileContextId,
         targetMessageId: targetMessage?.id,
         targetMessageContent: targetMessage?.content,
         customPrompt,
@@ -101,7 +135,20 @@ export function useAIChat({
       })
 
       if (!response.ok) {
-        throw new Error('Failed to get AI response')
+        let errorMessage = 'Failed to get AI response'
+        try {
+          const errorData = (await response.json()) as {
+            error?: string
+            details?: {
+              message?: string
+            }
+          }
+          errorMessage =
+            errorData.details?.message || errorData.error || errorMessage
+        } catch {
+          // Ignore parse failures and keep the generic message.
+        }
+        throw new Error(errorMessage)
       }
 
       const reader = response.body?.getReader()
@@ -153,16 +200,17 @@ export function useAIChat({
         processDataLine(buffered)
       }
     },
-    [isAIPrivate, roomId, userId]
+    [allowPrivateMessages, isAIPrivate, roomId, userId]
   )
 
   const sendAIMessage = useCallback(
     async (
       content: string,
       previousMessages: ChatMessage[] = [],
-      triggerMessageId?: string
+      triggerMessageId?: string,
+      fileContextId?: string
     ): Promise<void> => {
-      if (!isConnected || !content.trim() || isAILoading) return
+      if (!isConnected || !content.trim() || isAILoading || isAILocked) return
 
       setIsAILoading(true)
       let streamingMessage: ChatMessage | null = null
@@ -186,7 +234,7 @@ export function useAIChat({
           roomId,
           isAI: true,
           isStreaming: true,
-          isPrivate: isAIPrivate,
+          isPrivate: allowPrivateMessages ? isAIPrivate : false,
           requesterId: userId
         }
         onStreamingMessage(streamingMessage)
@@ -195,6 +243,7 @@ export function useAIChat({
           content,
           previousMessages,
           triggerMessageId,
+          fileContextId,
           onStart: (messageId, user) => {
             if (!streamingMessage) return
 
@@ -211,7 +260,7 @@ export function useAIChat({
               roomId,
               isAI: true,
               isStreaming: true,
-              isPrivate: isAIPrivate,
+              isPrivate: allowPrivateMessages ? isAIPrivate : false,
               requesterId: userId
             }
             onStreamingMessage(streamingMessage)
@@ -267,7 +316,10 @@ export function useAIChat({
         // Show error message in chat
         const errorMessage: ChatMessage = {
           id: crypto.randomUUID(),
-          content: 'Sorry, I encountered an error. Please try again.',
+          content:
+            error instanceof Error
+              ? error.message
+              : 'Sorry, I encountered an error. Please try again.',
           user: {
             id: 'ai-assistant',
             name: 'AI Assistant'
@@ -279,10 +331,13 @@ export function useAIChat({
         onCompleteMessage(errorMessage)
       } finally {
         setIsAILoading(false)
+        void queryClient.invalidateQueries({ queryKey: queryKeys.ai.usage() })
       }
     },
     [
+      allowPrivateMessages,
       isConnected,
+      isAILocked,
       roomId,
       userId,
       isAILoading,
@@ -290,6 +345,7 @@ export function useAIChat({
       onStreamingMessage,
       onRemoveStreamingMessage,
       onCompleteMessage,
+      queryClient,
       streamAIResponse
     ]
   )
@@ -307,6 +363,12 @@ export function useAIChat({
       }
       customPrompt?: string
     }): Promise<string> => {
+      if (isAILocked) {
+        throw new Error(
+          aiLockReason || 'AI assistant usage is locked until reset.'
+        )
+      }
+
       if (!isConnected || isAILoading) {
         throw new Error('AI is not available right now')
       }
@@ -347,17 +409,28 @@ export function useAIChat({
         return trimmed
       } finally {
         setIsAILoading(false)
+        void queryClient.invalidateQueries({ queryKey: queryKeys.ai.usage() })
       }
     },
-    [isConnected, isAILoading, streamAIResponse]
+    [
+      aiLockReason,
+      isAILocked,
+      isConnected,
+      isAILoading,
+      queryClient,
+      streamAIResponse
+    ]
   )
 
   return {
-    isAIEnabled,
+    isAIEnabled: effectiveAIEnabled,
     setIsAIEnabled,
     isAIPrivate,
     setIsAIPrivate,
     isAILoading,
+    isAILocked,
+    aiUsageNearLimitNotice,
+    aiLockReason,
     sendAIMessage,
     generateReplyDraft
   }

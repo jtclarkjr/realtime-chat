@@ -1,11 +1,9 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { AIBadge } from '@/components/ui/ai-badge'
-import { Send } from 'lucide-react'
+import { useMemo } from 'react'
+import type { PersonalAIModelValue } from '@/lib/types/ai-models'
+import { ChatInputPersonal } from './chat-input-personal'
+import { ChatInputStandard } from './chat-input-standard'
 
 const getPlaceholderText = (
   isLoading: boolean,
@@ -24,6 +22,7 @@ const getPlaceholderText = (
 }
 
 interface ChatInputProps {
+  mode?: 'group' | 'personal'
   newMessage: string
   setNewMessage: (message: string) => void
   onSendMessage: (e: React.FormEvent) => void
@@ -35,10 +34,31 @@ interface ChatInputProps {
   setIsAIPrivate: (isPrivate: boolean) => void
   isAILoading: boolean
   isAnonymous: boolean
+  allowPrivateAI?: boolean
   inputRef?: React.RefObject<HTMLTextAreaElement | null>
+  isAILocked?: boolean
+  aiLockReason?: string
+  aiNotice?: string
+  aiNoticeTone?: 'warning' | 'destructive'
+  selectedModel?: PersonalAIModelValue
+  modelSelectorDisabled?: boolean
+  modelSelectorNotice?: string
+  modelSelectorNoticeTone?: 'warning' | 'destructive'
+  onModelChange?: (value: PersonalAIModelValue) => void | Promise<void>
+  attachmentEnabled?: boolean
+  attachmentDisabled?: boolean
+  attachmentAccept?: string
+  attachmentMaxFiles?: number
+  attachmentChips?: Array<{
+    id: string
+    name: string
+  }>
+  onSelectAttachmentFiles?: (files: FileList | null) => void
+  onRemoveAttachmentFile?: (fileId: string) => void
 }
 
 export const ChatInput = ({
+  mode = 'group',
   newMessage,
   setNewMessage,
   onSendMessage,
@@ -50,106 +70,85 @@ export const ChatInput = ({
   setIsAIPrivate,
   isAILoading,
   isAnonymous,
-  inputRef
+  allowPrivateAI = true,
+  inputRef,
+  isAILocked = false,
+  aiLockReason,
+  aiNotice,
+  aiNoticeTone = 'warning',
+  selectedModel,
+  modelSelectorDisabled = false,
+  modelSelectorNotice,
+  modelSelectorNoticeTone = 'warning',
+  onModelChange,
+  attachmentEnabled = false,
+  attachmentDisabled = false,
+  attachmentAccept = '',
+  attachmentMaxFiles = 0,
+  attachmentChips = [],
+  onSelectAttachmentFiles,
+  onRemoveAttachmentFile
 }: ChatInputProps) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const placeholder = useMemo(
+    () =>
+      getPlaceholderText(
+        loading,
+        isAILoading,
+        isAIEnabled,
+        isConnected,
+        isAnonymous
+      ),
+    [isAIEnabled, isAILoading, isAnonymous, isConnected, loading]
+  )
 
-  const autoResize = () => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const maxHeight = parseFloat(getComputedStyle(textarea).maxHeight) || 160
-    textarea.style.height = 'auto'
-    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px'
+  if (mode === 'personal' && selectedModel && onModelChange) {
+    return (
+      <ChatInputPersonal
+        newMessage={newMessage}
+        setNewMessage={setNewMessage}
+        onSendMessage={onSendMessage}
+        loading={loading}
+        isConnected={isConnected}
+        isAILoading={isAILoading}
+        isAnonymous={isAnonymous}
+        inputRef={inputRef}
+        selectedModel={selectedModel}
+        modelSelectorDisabled={modelSelectorDisabled}
+        modelSelectorNotice={modelSelectorNotice}
+        modelSelectorNoticeTone={modelSelectorNoticeTone}
+        onModelChange={onModelChange}
+        attachmentEnabled={attachmentEnabled}
+        attachmentDisabled={attachmentDisabled}
+        attachmentAccept={attachmentAccept}
+        attachmentMaxFiles={attachmentMaxFiles}
+        attachmentChips={attachmentChips}
+        onSelectAttachmentFiles={onSelectAttachmentFiles || (() => {})}
+        onRemoveAttachmentFile={onRemoveAttachmentFile || (() => {})}
+        placeholder={placeholder}
+      />
+    )
   }
 
-  useEffect(() => {
-    autoResize()
-  }, [newMessage])
-
-  const inputDisabled = loading || isAILoading || isAnonymous
-
   return (
-    <form
-      onSubmit={onSendMessage}
-      className="flex w-full gap-2 sm:gap-3 border-t border-border p-3 sm:p-4 bg-background/50 backdrop-blur-sm"
-      role="form"
-      aria-label="Send message"
-    >
-      <div
-        className={cn(
-          'flex-1 flex items-end gap-2 rounded-2xl border border-border/50 bg-background dark:bg-transparent transition-all duration-300 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20 px-4 py-3 sm:py-2',
-          inputDisabled && 'opacity-50 cursor-not-allowed'
-        )}
-      >
-        <Textarea
-          ref={(node) => {
-            textareaRef.current = node
-            if (inputRef) {
-              inputRef.current = node
-            }
-          }}
-          className="flex-1 w-0 border-0 bg-transparent shadow-none px-0 py-1 min-h-0 h-auto resize-none max-h-64 overflow-y-scroll scrollbar-none leading-relaxed focus-visible:ring-0 focus-visible:border-transparent dark:bg-transparent"
-          value={newMessage}
-          onChange={(e) => {
-            setNewMessage(e.target.value)
-            autoResize()
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              if (newMessage.trim()) {
-                const form = e.currentTarget.closest('form')
-                if (form) {
-                  form.requestSubmit()
-                }
-              }
-            }
-          }}
-          placeholder={getPlaceholderText(
-            loading,
-            isAILoading,
-            isAIEnabled,
-            isConnected,
-            isAnonymous
-          )}
-          disabled={inputDisabled}
-          autoComplete="off"
-          autoCapitalize="sentences"
-          autoFocus={!inputDisabled}
-          aria-label="Type your message"
-          aria-describedby="ai-status"
-          rows={1}
-        />
-        <div className="flex-shrink-0">
-          <AIBadge
-            isActive={isAIEnabled}
-            onToggle={() => setIsAIEnabled(!isAIEnabled)}
-            isPrivate={isAIPrivate}
-            onPrivacyToggle={() => setIsAIPrivate(!isAIPrivate)}
-            isAnonymous={isAnonymous}
-          />
-        </div>
-      </div>
-      {!loading && newMessage.trim() && !isAnonymous && (
-        <Button
-          className={cn(
-            'aspect-square h-12 w-12 sm:h-10 sm:w-10 rounded-full animate-in fade-in slide-in-from-right-4 duration-300 active:scale-95',
-            isConnected
-              ? 'bg-primary hover:bg-primary/90'
-              : 'bg-orange-500 hover:bg-orange-600'
-          )}
-          type="submit"
-          disabled={loading}
-          aria-label={isConnected ? 'Send message' : 'Queue message (offline)'}
-          title={
-            isConnected
-              ? 'Send message'
-              : "You're offline - message will be queued and sent when connection is restored"
-          }
-        >
-          <Send className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
-        </Button>
-      )}
-    </form>
+    <ChatInputStandard
+      newMessage={newMessage}
+      setNewMessage={setNewMessage}
+      onSendMessage={onSendMessage}
+      loading={loading}
+      isConnected={isConnected}
+      isAIEnabled={isAIEnabled}
+      setIsAIEnabled={setIsAIEnabled}
+      isAIPrivate={isAIPrivate}
+      setIsAIPrivate={setIsAIPrivate}
+      isAILoading={isAILoading}
+      isAnonymous={isAnonymous}
+      allowPrivateAI={allowPrivateAI}
+      inputRef={inputRef}
+      isAILocked={isAILocked}
+      aiLockReason={aiLockReason}
+      aiNotice={aiNotice}
+      aiNoticeTone={aiNoticeTone}
+      placeholder={placeholder}
+    />
   )
 }

@@ -3,6 +3,7 @@ import { markAsReceived } from '@/lib/services/chat'
 import { withAuth, validateUserAccess } from '@/lib/auth/middleware'
 import { markReceivedSchema, validateRequestBody } from '@/lib/validation'
 import type { MarkReceivedRequest } from '@/lib/types/database'
+import { resolveRoomAccess } from '@/lib/services/domain'
 
 export const POST = withAuth(async (request: NextRequest, { user }) => {
   try {
@@ -19,6 +20,14 @@ export const POST = withAuth(async (request: NextRequest, { user }) => {
       return NextResponse.json(
         { error: 'You can only mark messages as received for yourself' },
         { status: 403 }
+      )
+    }
+
+    const access = await resolveRoomAccess(body.roomId, user)
+    if (!access.canRead) {
+      return NextResponse.json(
+        { error: 'Channel not found or unauthorized' },
+        { status: 404 }
       )
     }
 

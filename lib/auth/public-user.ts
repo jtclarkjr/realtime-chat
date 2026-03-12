@@ -18,6 +18,8 @@ export function toPublicUser(user: User): PublicUser {
   return {
     id: user.id,
     username,
+    displayName: trimmedDisplayName || username,
+    email: user.email || undefined,
     avatarUrl: user.user_metadata?.avatar_url,
     isAnonymous
   }

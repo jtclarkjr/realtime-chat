@@ -10,6 +10,8 @@ export function useQueryCacheSync() {
 
   const invalidateRooms = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.rooms.all })
+    queryClient.invalidateQueries({ queryKey: queryKeys.groups.all })
+    queryClient.invalidateQueries({ queryKey: queryKeys.personalChats.all })
   }, [queryClient])
 
   const invalidateMissedMessages = useCallback(

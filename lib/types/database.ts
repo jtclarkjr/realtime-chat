@@ -25,6 +25,55 @@ export type LatestVisibleMessage = Pick<
 export type DatabaseRoom = Database['public']['Tables']['rooms']['Row']
 export type DatabaseRoomInsert = Database['public']['Tables']['rooms']['Insert']
 export type DatabaseRoomUpdate = Database['public']['Tables']['rooms']['Update']
+export type DatabaseGroup = Database['public']['Tables']['groups']['Row']
+export type DatabaseGroupInsert =
+  Database['public']['Tables']['groups']['Insert']
+export type DatabaseGroupUpdate =
+  Database['public']['Tables']['groups']['Update']
+export type GroupMembership =
+  Database['public']['Tables']['group_memberships']['Row']
+export type RoomMembership =
+  Database['public']['Tables']['room_memberships']['Row']
+
+export interface GroupPermissions {
+  is_member: boolean
+  is_owner: boolean
+  can_read: boolean
+  can_write: boolean
+  can_admin: boolean
+}
+
+export interface GroupMemberEntry {
+  membership: GroupMembership
+  profile: UserDirectoryEntry | null
+}
+
+export interface RoomMemberEntry {
+  membership: RoomMembership
+  profile: UserDirectoryEntry | null
+}
+
+export interface GroupView {
+  group: DatabaseGroup
+  permissions: GroupPermissions
+  channels: Array<{
+    room: DatabaseRoom
+    permissions: GroupPermissions
+  }>
+}
+
+export interface PersonalChat extends DatabaseRoom {
+  kind: 'personal'
+  owner_user_id: string
+}
+
+export interface UserDirectoryEntry {
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  email: string | null
+  last_seen_at: string | null
+}
 
 // API message types from external source
 export interface ApiMessage {
@@ -59,6 +108,7 @@ export interface ChatMessageWithDB {
   }
   createdAt: string
   channelId: string
+  groupId?: string
   isAI?: boolean
   isPrivate?: boolean
   requesterId?: string
@@ -79,6 +129,7 @@ export interface ChatMessage {
   }
   createdAt: string
   roomId?: string
+  groupId?: string
   isAI?: boolean
   isStreaming?: boolean
   isPrivate?: boolean
@@ -131,3 +182,12 @@ export interface MarkReceivedRequest {
 }
 
 export type UnsendMessageRequest = MarkReceivedRequest
+
+export interface RoomWithLastMessage extends DatabaseRoom {
+  lastMessage?: {
+    content: string
+    timestamp: string
+    userName: string
+    isAI: boolean
+  }
+}

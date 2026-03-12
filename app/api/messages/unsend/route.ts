@@ -3,6 +3,7 @@ import { unsendMessage } from '@/lib/services/chat'
 import { withNonAnonymousAuth, validateUserAccess } from '@/lib/auth/middleware'
 import { unsendMessageSchema, validateRequestBody } from '@/lib/validation'
 import type { UnsendMessageRequest } from '@/lib/types/database'
+import { resolveRoomAccess } from '@/lib/services/domain'
 
 export const POST = withNonAnonymousAuth(
   async (request: NextRequest, { user, supabase }) => {
@@ -20,6 +21,16 @@ export const POST = withNonAnonymousAuth(
         return NextResponse.json(
           { error: 'You can only unsend your own messages' },
           { status: 403 }
+        )
+      }
+
+      const access = await resolveRoomAccess(body.roomId, user, {
+        autoJoinForWrite: true
+      })
+      if (!access.canWrite) {
+        return NextResponse.json(
+          { error: 'Channel not found or unauthorized' },
+          { status: 404 }
         )
       }
 

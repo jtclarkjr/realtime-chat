@@ -5,28 +5,48 @@ import {
   PopoverContent,
   PopoverTrigger
 } from '@/components/ui/popover'
-import { Hash, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useUIStore } from '@/lib/stores/ui-store'
-import { useRooms } from '@/lib/query/queries/use-rooms'
-import type { DatabaseRoom } from '@/lib/types/database'
+import { useGroups, usePersonalChats } from '@/lib/query/queries'
+import type {
+  DatabaseRoom,
+  GroupView,
+  PersonalChat
+} from '@/lib/types/database'
+import { getRoomHref } from '@/lib/utils/chat-routes'
+import { ConversationIcon } from './conversation-icon'
 
 interface NotificationDropdownProps {
-  initialRooms: DatabaseRoom[]
+  initialGroups: GroupView[]
+  initialPersonalChats: PersonalChat[]
+  includePersonalChats?: boolean
   children: React.ReactNode
 }
 
 export function NotificationDropdown({
-  initialRooms,
+  initialGroups,
+  initialPersonalChats,
+  includePersonalChats = true,
   children
 }: NotificationDropdownProps) {
   const router = useRouter()
   const { unreadCounts, readRooms, markAsRead, dismissNotification } =
     useUIStore()
 
-  const { data: rooms = [] } = useRooms({
-    initialData: initialRooms.length > 0 ? initialRooms : undefined
+  const { data: groups = [] } = useGroups({
+    initialData: initialGroups.length > 0 ? initialGroups : undefined,
+    enabled: initialGroups.length === 0
   })
+  const { data: personalChats = [] } = usePersonalChats({
+    initialData:
+      initialPersonalChats.length > 0 ? initialPersonalChats : undefined,
+    enabled: includePersonalChats && initialPersonalChats.length === 0
+  })
+  const rooms = [
+    ...groups.flatMap((group) => group.channels.map((entry) => entry.room)),
+    ...(includePersonalChats ? personalChats : [])
+  ]
 
   // Get rooms with unread messages
   const unreadRooms = rooms
@@ -34,7 +54,7 @@ export function NotificationDropdown({
     .toSorted((a, b) => (unreadCounts[b.id] || 0) - (unreadCounts[a.id] || 0))
 
   const readRoomList = readRooms
-    .map((roomId) => rooms.find((room) => room.id === roomId))
+    .map((roomId: string) => rooms.find((room) => room.id === roomId))
     .filter(
       (room): room is DatabaseRoom =>
         !!room && (unreadCounts[room.id] || 0) === 0
@@ -42,7 +62,8 @@ export function NotificationDropdown({
 
   const handleRoomClick = (roomId: string) => {
     markAsRead(roomId)
-    router.push(`/room/${roomId}`)
+    const room = rooms.find((entry) => entry.id === roomId)
+    router.push(room ? getRoomHref(room) : `/room/${roomId}`)
   }
 
   const handleDismiss = (
@@ -100,7 +121,7 @@ export function NotificationDropdown({
                     <X className="h-3.5 w-3.5" />
                   </button>
                   <div className="p-2 bg-muted rounded-lg">
-                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    <ConversationIcon room={room} className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{room.name}</div>
@@ -134,7 +155,7 @@ export function NotificationDropdown({
                     <X className="h-3.5 w-3.5" />
                   </button>
                   <div className="p-2 bg-muted rounded-lg">
-                    <Hash className="h-4 w-4 text-muted-foreground" />
+                    <ConversationIcon room={room} className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm">{room.name}</div>

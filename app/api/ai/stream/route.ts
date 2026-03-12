@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import type { User } from '@supabase/supabase-js'
 import { sendAIMessage, markMessageAsAITrigger } from '@/lib/services/chat'
 import { requireNonAnonymousAuth } from '@/lib/auth/middleware'
 import { aiStreamRequestSchema, validateRequestBody } from '@/lib/validation'
@@ -9,7 +10,8 @@ import { CURRENT_TIME_CONTEXT_TEMPLATE } from '@/lib/ai/constants'
 import {
   AI_STREAM_SYSTEM_PROMPT,
   AI_STREAM_MARKDOWN_SYSTEM_PROMPT,
-  AI_WEB_SEARCH_INSTRUCTIONS
+  AI_WEB_SEARCH_INSTRUCTIONS,
+  buildAIPersonalizationContext
 } from '@/lib/ai/prompts'
 import { shouldUseWebSearch } from '@/lib/ai/recency-detector'
 import { getEffectiveAIFlags } from '@/lib/ai/feature-flags-runtime'
@@ -24,6 +26,21 @@ import {
 } from '@/lib/ai/stream-sse'
 import { generateAIResponse } from '@/lib/ai/response-strategy'
 import type { AIStreamRealtimePayload } from '@/lib/types/ai-stream'
+import { resolveRoomAccess } from '@/lib/services/domain'
+import { getAIPersonalizationSettings } from '@/lib/services/ai/personalization-service'
+import {
+  addOutputTokens,
+  AIUsageLimitError,
+  checkAndConsumePromptTokens,
+  estimatePromptTokens,
+  estimateTokens
+} from '@/lib/services/ai/usage-service'
+import {
+  buildUntrustedAttachmentContextMessage,
+  FileContextServiceError,
+  loadFileContextForAI,
+  markFileContextConsumed
+} from '@/lib/services/ai/file-context-service'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -64,10 +81,14 @@ const broadcastAIStreamEvent = async ({
 
 const buildDatedSystemPrompt = ({
   responseFormat,
-  searchNeeded
+  searchNeeded,
+  personalization
 }: {
   responseFormat?: 'plain' | 'markdown'
   searchNeeded: boolean
+  personalization?: Awaited<
+    ReturnType<typeof getAIPersonalizationSettings>
+  > | null
 }) => {
   const baseSystemPrompt =
     responseFormat === 'markdown'
@@ -76,6 +97,7 @@ const buildDatedSystemPrompt = ({
   const systemPrompt = searchNeeded
     ? `${baseSystemPrompt}\n\n${AI_WEB_SEARCH_INSTRUCTIONS}`
     : baseSystemPrompt
+  const personalizationContext = buildAIPersonalizationContext(personalization)
 
   const { nowIso, nowUtc } = getCurrentDateContext()
   const timeContext = CURRENT_TIME_CONTEXT_TEMPLATE.replace(
@@ -83,7 +105,7 @@ const buildDatedSystemPrompt = ({
     nowIso
   ).replace('{{NOW_UTC}}', nowUtc)
 
-  return `${systemPrompt}\n\n${timeContext}`
+  return `${systemPrompt}${personalizationContext}\n\n${timeContext}`
 }
 
 const persistAndBroadcastAIMessage = async ({
@@ -93,6 +115,7 @@ const persistAndBroadcastAIMessage = async ({
   isPrivate,
   content,
   streamSourceId,
+  viewer,
   supabase
 }: {
   roomId: string
@@ -101,18 +124,22 @@ const persistAndBroadcastAIMessage = async ({
   isPrivate?: boolean
   content: string
   streamSourceId?: string
+  viewer: User
   supabase: {
     channel: (roomId: string) => {
       httpSend: (event: string, payload: unknown) => Promise<unknown>
     }
   }
 }) => {
-  const aiMessage = await sendAIMessage({
-    roomId,
-    content,
-    isPrivate: isPrivate || false,
-    requesterId: userId
-  })
+  const aiMessage = await sendAIMessage(
+    {
+      roomId,
+      content,
+      isPrivate: isPrivate || false,
+      requesterId: userId
+    },
+    viewer
+  )
 
   if (triggerMessageId) {
     await markMessageAsAITrigger(triggerMessageId)
@@ -167,6 +194,77 @@ export const POST = async (request: NextRequest) => {
       return plainErrorResponse('AI_REQUEST_SELF_ONLY')
     }
 
+    const roomAccess = await resolveRoomAccess(body.roomId, user, {
+      autoJoinForWrite: true
+    })
+    if (!roomAccess.canWrite) {
+      return new Response(
+        JSON.stringify({
+          error: 'You do not have permission to use AI in this room'
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    if (roomAccess.room.kind === 'personal' && !roomAccess.room.ai_enabled) {
+      return new Response(
+        JSON.stringify({ error: 'AI is disabled for this personal chat' }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const previousMessagesForContext = [...(body.previousMessages || [])]
+    if (body.fileContextId) {
+      if (roomAccess.room.kind !== 'personal') {
+        return plainErrorResponse('ATTACHMENTS_PERSONAL_ONLY')
+      }
+
+      try {
+        const fileContext = await loadFileContextForAI({
+          roomId: roomAccess.room.id,
+          userId: user.id,
+          fileContextId: body.fileContextId
+        })
+        previousMessagesForContext.push(
+          buildUntrustedAttachmentContextMessage(fileContext)
+        )
+      } catch (error) {
+        if (error instanceof FileContextServiceError) {
+          return plainErrorResponse(error.errorCode, error.details)
+        }
+
+        throw error
+      }
+    }
+
+    try {
+      await checkAndConsumePromptTokens(
+        user.id,
+        estimatePromptTokens({
+          message: body.message,
+          previousMessages: previousMessagesForContext,
+          customPrompt: body.customPrompt,
+          targetMessageContent: body.targetMessageContent
+        })
+      )
+    } catch (error) {
+      if (error instanceof AIUsageLimitError) {
+        return plainErrorResponse('AI_USAGE_LIMIT_REACHED', {
+          windowKind: error.windowKind,
+          resetAt: error.resetAt,
+          message: error.message
+        })
+      }
+
+      throw error
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
       console.error('Anthropic API key not configured')
       return plainErrorResponse('AI_SERVICE_NOT_CONFIGURED')
@@ -177,7 +275,7 @@ export const POST = async (request: NextRequest) => {
     })
 
     const messages: Anthropic.MessageParam[] = []
-    for (const msg of body.previousMessages || []) {
+    for (const msg of previousMessagesForContext) {
       messages.push({
         role: msg.isAi ? 'assistant' : 'user',
         content: msg.isAi ? msg.content : `${msg.userName}: ${msg.content}`
@@ -201,12 +299,17 @@ export const POST = async (request: NextRequest) => {
 
     messages.push({ role: 'user', content: currentUserMessage })
 
-    const selectedModel = resolveAIModel({
-      message: body.message,
-      customPrompt: body.customPrompt,
-      targetMessageContent: body.targetMessageContent,
-      responseFormat: body.responseFormat
-    })
+    const effectiveIsPrivate =
+      roomAccess.room.kind === 'personal' ? false : !!body.isPrivate
+    const selectedModel =
+      roomAccess.room.kind === 'personal' && roomAccess.room.ai_model
+        ? roomAccess.room.ai_model
+        : resolveAIModel({
+            message: body.message,
+            customPrompt: body.customPrompt,
+            targetMessageContent: body.targetMessageContent,
+            responseFormat: body.responseFormat
+          })
 
     const flags = await getEffectiveAIFlags()
     if (flags.fallbackApplied && flags.reason) {
@@ -219,16 +322,26 @@ export const POST = async (request: NextRequest) => {
       customPrompt: body.customPrompt,
       targetMessageContent: body.targetMessageContent
     })
+    let personalization = null
+    try {
+      personalization = await getAIPersonalizationSettings(user.id)
+    } catch (personalizationError) {
+      console.warn(
+        'Failed to load AI personalization settings; using defaults:',
+        personalizationError
+      )
+    }
 
     const datedSystemPrompt = buildDatedSystemPrompt({
       responseFormat: body.responseFormat,
-      searchNeeded: webSearchConfig.enabled && searchRequested
+      searchNeeded: webSearchConfig.enabled && searchRequested,
+      personalization
     })
 
     const tempMessageId = crypto.randomUUID()
     const streamStartedAt = new Date().toISOString()
     const encoder = new TextEncoder()
-    const shouldBroadcastStream = !body.isPrivate && !body.draftOnly
+    const shouldBroadcastStream = !effectiveIsPrivate && !body.draftOnly
     let latestFullContent = ''
 
     const readableStream = new ReadableStream({
@@ -248,7 +361,7 @@ export const POST = async (request: NextRequest) => {
               streamId: tempMessageId,
               roomId: body.roomId,
               requesterId: body.userId,
-              isPrivate: false,
+              isPrivate: effectiveIsPrivate,
               user: AI_ASSISTANT,
               createdAt: streamStartedAt,
               fullContent: latestFullContent
@@ -299,7 +412,7 @@ export const POST = async (request: NextRequest) => {
                 streamId: tempMessageId,
                 roomId: body.roomId,
                 requesterId: body.userId,
-                isPrivate: false,
+                isPrivate: effectiveIsPrivate,
                 user: AI_ASSISTANT,
                 createdAt: streamStartedAt,
                 fullContent: ''
@@ -354,14 +467,29 @@ export const POST = async (request: NextRequest) => {
               roomId: body.roomId,
               userId: body.userId,
               triggerMessageId: body.triggerMessageId,
-              isPrivate: body.isPrivate,
+              isPrivate: effectiveIsPrivate,
               content: trimmedResponse,
               streamSourceId: tempMessageId,
+              viewer: user,
               supabase
             })
 
             persistedMessageId = aiMessage.id
             persistedCreatedAt = aiMessage.createdAt
+          }
+
+          try {
+            await addOutputTokens(user.id, estimateTokens(trimmedResponse))
+          } catch (usageError) {
+            console.warn('Failed to track AI output usage tokens:', usageError)
+          }
+
+          if (body.fileContextId) {
+            try {
+              await markFileContextConsumed(body.fileContextId)
+            } catch (consumeError) {
+              console.warn('Failed to consume AI file context:', consumeError)
+            }
           }
 
           const completeData = {
@@ -390,7 +518,7 @@ export const POST = async (request: NextRequest) => {
                 streamId: tempMessageId,
                 roomId: body.roomId,
                 requesterId: body.userId,
-                isPrivate: false,
+                isPrivate: effectiveIsPrivate,
                 user: AI_ASSISTANT,
                 createdAt: streamStartedAt,
                 fullContent: latestFullContent

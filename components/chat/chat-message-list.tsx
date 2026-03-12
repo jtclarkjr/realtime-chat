@@ -80,10 +80,11 @@ export const ChatMessageList = forwardRef<HTMLDivElement, ChatMessageListProps>(
         <ScrollDateIndicator date={scrollDate} isVisible={isScrolling} />
         <div
           ref={setCombinedRef}
-          className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-4"
+          className="flex-1 space-y-2 overflow-y-auto px-3 pb-3 pt-16 sm:space-y-4 sm:px-4 sm:pb-4 sm:pt-16"
           role="log"
           aria-label="Chat messages"
           aria-live="polite"
+          style={{ scrollPaddingTop: '4rem' }}
           onScroll={handleCombinedScroll}
         >
           {loading && filteredMessages.length === 0 && (

@@ -22,16 +22,19 @@ export const POST = withNonAnonymousAuth(
         return errorResponse('SEND_AS_SELF_ONLY')
       }
 
-      const message = await sendMessage({
-        roomId: body.roomId,
-        userId: body.userId,
-        username: body.username,
-        content: body.content,
-        isPrivate: body.isPrivate
-      })
+      const message = await sendMessage(
+        {
+          roomId: body.roomId,
+          userId: body.userId,
+          username: body.username,
+          content: body.content,
+          isPrivate: body.isPrivate
+        },
+        user
+      )
 
       // Only broadcast non-private messages via Supabase Realtime
-      if (!body.isPrivate) {
+      if (!message.isPrivate) {
         // Get sender's avatar for the broadcast
         const senderProfile = await userService.getUserProfile(body.userId)
 
@@ -56,6 +59,9 @@ export const POST = withNonAnonymousAuth(
       })
     } catch (error) {
       console.error('Error sending message:', error)
+      if (error instanceof Error && error.message.includes('permission')) {
+        return NextResponse.json({ error: error.message }, { status: 403 })
+      }
       return errorResponse('MESSAGE_SEND_FAILED')
     }
   }

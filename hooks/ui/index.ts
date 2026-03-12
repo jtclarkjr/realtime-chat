@@ -1,4 +1,5 @@
 export { useChatScroll } from './use-chat-scroll'
+export { useComposerTextarea } from './use-composer-textarea'
 export { useScrollDateDetection } from './use-scroll-date-detection'
 export { useSmartAutoScroll } from './use-smart-auto-scroll'
 export { useVirtualizer } from './use-virtualizer'

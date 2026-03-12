@@ -86,6 +86,142 @@ export const createRoomSchema = z
   })
   .strict()
 
+const visibilitySchema = z.enum(['public', 'private'])
+const baseStyleToneSchema = z.enum([
+  'default',
+  'professional',
+  'friendly',
+  'candid',
+  'quirky',
+  'efficient',
+  'nerdy',
+  'cynical'
+])
+const responseDetailModeSchema = z.enum([
+  'default',
+  'short',
+  'detailed',
+  'structured'
+])
+const traitLevelSchema = z.enum(['default', 'subtle', 'strong'])
+
+export const createGroupSchema = z
+  .object({
+    name: validatedTrimmedString(2, 80, 'Group name').refine(
+      (val) => byteLength(val) <= 320,
+      {
+        message: 'Group name exceeds maximum size of 320 bytes'
+      }
+    ),
+    description: validatedTrimmedString(0, 500, 'Description')
+      .refine((val) => byteLength(val) <= 2048, {
+        message: 'Description exceeds maximum size of 2KB'
+      })
+      .optional()
+      .nullable(),
+    visibility: visibilitySchema.default('public'),
+    memberUserIds: z.array(uuidSchema).max(100).optional()
+  })
+  .strict()
+
+export const createChannelSchema = z
+  .object({
+    name: validatedTrimmedString(2, 80, 'Channel name').refine(
+      (val) => byteLength(val) <= 320,
+      {
+        message: 'Channel name exceeds maximum size of 320 bytes'
+      }
+    ),
+    description: validatedTrimmedString(0, 500, 'Description')
+      .refine((val) => byteLength(val) <= 2048, {
+        message: 'Description exceeds maximum size of 2KB'
+      })
+      .optional()
+      .nullable(),
+    visibility: visibilitySchema.default('public')
+  })
+  .strict()
+
+export const listUsersQuerySchema = z
+  .object({
+    q: z.string().trim().max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional()
+  })
+  .strict()
+
+export const memberUserIdsSchema = z
+  .object({
+    userIds: z.array(uuidSchema).min(1).max(100)
+  })
+  .strict()
+
+export const updateGroupMemberSchema = z
+  .object({
+    canRead: z.boolean(),
+    canWrite: z.boolean(),
+    canAdmin: z.boolean()
+  })
+  .strict()
+
+export const personalChatsQuerySchema = z
+  .object({
+    q: z.string().trim().max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    offset: z.coerce.number().int().min(0).optional()
+  })
+  .strict()
+
+export const startPersonalChatSchema = z
+  .object({
+    userId: uuidSchema,
+    username: validatedTrimmedString(1, 50, 'Username'),
+    avatarUrl: z.string().trim().url().optional(),
+    content: validatedTrimmedString(1, 5000, 'Message').refine(
+      (val) => byteLength(val) <= 20480,
+      {
+        message: 'Message exceeds maximum size of 20KB'
+      }
+    ),
+    aiEnabled: z.boolean().optional(),
+    aiModel: z.string().trim().max(120).optional(),
+    deferAiResponse: z.boolean().optional(),
+    name: validatedTrimmedString(1, 80, 'Chat name')
+      .refine((val) => byteLength(val) <= 320, {
+        message: 'Chat name exceeds maximum size of 320 bytes'
+      })
+      .optional()
+  })
+  .strict()
+
+export const updatePersonalChatSchema = z
+  .object({
+    name: validatedTrimmedString(1, 80, 'Chat name')
+      .refine((val) => byteLength(val) <= 320, {
+        message: 'Chat name exceeds maximum size of 320 bytes'
+      })
+      .optional(),
+    aiEnabled: z.boolean().optional(),
+    aiModel: z.string().trim().max(120).nullable().optional()
+  })
+  .strict()
+
+export const updateAIPersonalizationSchema = z
+  .object({
+    baseStyleTone: baseStyleToneSchema,
+    responseDetailMode: responseDetailModeSchema,
+    characteristics: z
+      .object({
+        warm: traitLevelSchema,
+        enthusiastic: traitLevelSchema,
+        headersAndLists: traitLevelSchema,
+        emoji: traitLevelSchema
+      })
+      .strict(),
+    customInstructions: validatedTrimmedString(0, 1000, 'Custom instructions'),
+    aboutYou: validatedTrimmedString(0, 1000, 'About you')
+  })
+  .strict()
+
 export const roomNameSchema = z
   .string()
   .transform((val) => val.trim().normalize('NFC'))
@@ -136,6 +272,7 @@ export const aiStreamRequestSchema = z
     isPrivate: z.boolean().optional(),
     responseFormat: z.enum(['plain', 'markdown']).optional(),
     triggerMessageId: nonEmptyString.optional(),
+    fileContextId: uuidSchema.optional(),
     targetMessageId: nonEmptyString.optional(),
     targetMessageContent: validatedTrimmedString(
       1,
@@ -181,7 +318,13 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type UnsendMessageInput = z.infer<typeof unsendMessageSchema>
 export type MarkReceivedInput = z.infer<typeof markReceivedSchema>
 export type CreateRoomInput = z.infer<typeof createRoomSchema>
+export type CreateGroupInput = z.infer<typeof createGroupSchema>
+export type CreateChannelInput = z.infer<typeof createChannelSchema>
 export type DeleteRoomInput = z.infer<typeof deleteRoomSchema>
 export type AIStreamRequestInput = z.infer<typeof aiStreamRequestSchema>
 export type RoomIdParamInput = z.infer<typeof roomIdParamSchema>
 export type RejoinRoomInput = z.infer<typeof rejoinRoomSchema>
+export type MemberUserIdsInput = z.infer<typeof memberUserIdsSchema>
+export type UpdateGroupMemberInput = z.infer<typeof updateGroupMemberSchema>
+export type StartPersonalChatInput = z.infer<typeof startPersonalChatSchema>
+export type UpdatePersonalChatInput = z.infer<typeof updatePersonalChatSchema>

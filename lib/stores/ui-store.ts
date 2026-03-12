@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { PresenceState } from '@/lib/types/presence'
+import type { SidebarSection } from '@/lib/types/ui'
 
 interface UIState {
   // Hydration state for persisted store
@@ -11,6 +12,24 @@ interface UIState {
   sidebarCollapsed: boolean
   setSidebarCollapsed: (collapsed: boolean) => void
   toggleSidebar: () => void
+  sidebarSection: SidebarSection
+  setSidebarSection: (section: SidebarSection) => void
+  expandedGroupId: string | null
+  openExpandedGroup: (groupId: string) => void
+  toggleExpandedGroup: (groupId: string) => void
+  clearExpandedGroup: () => void
+
+  // Navigation dialogs (not persisted)
+  createGroupDialogOpen: boolean
+  setCreateGroupDialogOpen: (open: boolean) => void
+  createChannelDialogOpen: boolean
+  selectedGroupIdForChannel: string
+  selectedGroupVisibilityForChannel: 'public' | 'private'
+  openCreateChannelDialog: (
+    groupId: string,
+    visibility: 'public' | 'private'
+  ) => void
+  closeCreateChannelDialog: () => void
 
   // Unread counts per room
   unreadCounts: Record<string, number>
@@ -40,16 +59,48 @@ interface UIState {
   // Full presence state per room (not persisted)
   roomPresenceUsers: Record<string, PresenceState> // roomId -> presence users
   setRoomPresenceUsers: (roomId: string, users: PresenceState) => void
+
+  // Pending first-response AI bootstrap for freshly created personal chats
+  pendingPersonalAI: Record<
+    string,
+    {
+      content: string
+      triggerMessageId?: string
+      fileContextId?: string
+      requiresFileContext?: boolean
+    }
+  >
+  setPendingPersonalAI: (
+    roomId: string,
+    payload: {
+      content: string
+      triggerMessageId?: string
+      fileContextId?: string
+      requiresFileContext?: boolean
+    }
+  ) => void
+  clearPendingPersonalAI: (roomId: string) => void
+  consumePendingPersonalAI: (roomId: string) => {
+    content: string
+    triggerMessageId?: string
+    fileContextId?: string
+    requiresFileContext?: boolean
+  } | null
 }
 
 type PersistedState = Pick<
   UIState,
-  'sidebarCollapsed' | 'unreadCounts' | 'recentRooms' | 'readRooms'
+  | 'sidebarCollapsed'
+  | 'sidebarSection'
+  | 'expandedGroupId'
+  | 'unreadCounts'
+  | 'recentRooms'
+  | 'readRooms'
 >
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Hydration state
       hasHydrated: false,
       setHasHydrated: (hydrated) => set({ hasHydrated: hydrated }),
@@ -59,6 +110,38 @@ export const useUIStore = create<UIState>()(
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
       toggleSidebar: () =>
         set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      sidebarSection: 'groups',
+      setSidebarSection: (sidebarSection) => set({ sidebarSection }),
+      expandedGroupId: null,
+      openExpandedGroup: (expandedGroupId) => set({ expandedGroupId }),
+      toggleExpandedGroup: (groupId) =>
+        set((state) => ({
+          expandedGroupId: state.expandedGroupId === groupId ? null : groupId
+        })),
+      clearExpandedGroup: () => set({ expandedGroupId: null }),
+
+      // Navigation dialogs (not persisted)
+      createGroupDialogOpen: false,
+      setCreateGroupDialogOpen: (createGroupDialogOpen) =>
+        set({ createGroupDialogOpen }),
+      createChannelDialogOpen: false,
+      selectedGroupIdForChannel: '',
+      selectedGroupVisibilityForChannel: 'public',
+      openCreateChannelDialog: (
+        selectedGroupIdForChannel,
+        selectedGroupVisibilityForChannel
+      ) =>
+        set({
+          createChannelDialogOpen: true,
+          selectedGroupIdForChannel,
+          selectedGroupVisibilityForChannel
+        }),
+      closeCreateChannelDialog: () =>
+        set({
+          createChannelDialogOpen: false,
+          selectedGroupIdForChannel: '',
+          selectedGroupVisibilityForChannel: 'public'
+        }),
 
       // Unread counts
       unreadCounts: {},
@@ -169,14 +252,43 @@ export const useUIStore = create<UIState>()(
             ...state.roomPresenceUsers,
             [roomId]: users
           }
-        }))
+        })),
+
+      pendingPersonalAI: {},
+      setPendingPersonalAI: (roomId, payload) =>
+        set((state) => ({
+          pendingPersonalAI: {
+            ...state.pendingPersonalAI,
+            [roomId]: payload
+          }
+        })),
+      clearPendingPersonalAI: (roomId) =>
+        set((state) => {
+          const { [roomId]: _pendingPayload, ...rest } = state.pendingPersonalAI
+          return {
+            pendingPersonalAI: rest
+          }
+        }),
+      consumePendingPersonalAI: (roomId) => {
+        const payload = get().pendingPersonalAI[roomId] || null
+        set((state) => {
+          const { [roomId]: _pendingPayload, ...rest } = state.pendingPersonalAI
+          return {
+            pendingPersonalAI: rest
+          }
+        })
+        return payload
+      }
     }),
     {
       name: 'ui-storage',
+      skipHydration: true,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) =>
         ({
           sidebarCollapsed: state.sidebarCollapsed,
+          sidebarSection: state.sidebarSection,
+          expandedGroupId: state.expandedGroupId,
           unreadCounts: state.unreadCounts,
           recentRooms: state.recentRooms,
           readRooms: state.readRooms

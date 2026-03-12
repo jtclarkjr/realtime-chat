@@ -1,4 +1,4 @@
-import { getInitialRoomsData } from '@/lib/actions/room-actions'
+import { getInitialNavigationData } from '@/lib/actions/navigation-actions'
 import { createClient } from '@/lib/supabase/server'
 import { toPublicUser } from '@/lib/auth/public-user'
 import { headers } from 'next/headers'
@@ -33,12 +33,15 @@ export default async function AuthenticatedLayout({
   const userData = toPublicUser(user)
 
   // Fetch initial room data server-side
-  const { rooms, defaultRoomId } = await getInitialRoomsData()
+  const { groups, groupChannels, personalChats, defaultRoomId } =
+    await getInitialNavigationData()
 
   return (
     <AuthenticatedLayoutClient
       user={userData}
-      initialRooms={rooms}
+      initialGroups={groups}
+      initialGroupChannels={groupChannels}
+      initialPersonalChats={personalChats}
       initialDefaultRoomId={defaultRoomId}
     >
       {children}

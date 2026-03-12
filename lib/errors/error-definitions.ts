@@ -49,6 +49,26 @@ export const ERROR_DEFINITIONS = {
     message: 'Invalid Content-Length',
     statusCode: 400
   },
+  UNSUPPORTED_FILE_TYPE: {
+    code: 'UNSUPPORTED_FILE_TYPE',
+    message: 'Unsupported file type',
+    statusCode: 400
+  },
+  TOO_MANY_FILES: {
+    code: 'TOO_MANY_FILES',
+    message: 'Too many files provided',
+    statusCode: 400
+  },
+  ATTACHMENTS_PERSONAL_ONLY: {
+    code: 'ATTACHMENTS_PERSONAL_ONLY',
+    message: 'Attachments are only available in personal chats',
+    statusCode: 400
+  },
+  FILE_PROCESSING_FAILED: {
+    code: 'FILE_PROCESSING_FAILED',
+    message: 'Failed to process uploaded file',
+    statusCode: 400
+  },
 
   // 411 - Length Required
   LENGTH_REQUIRED: {
@@ -95,6 +115,11 @@ export const ERROR_DEFINITIONS = {
     message: 'This action requires a full account. Please sign in.',
     statusCode: 403
   },
+  FORBIDDEN_FILE_CONTEXT_ACCESS: {
+    code: 'FORBIDDEN_FILE_CONTEXT_ACCESS',
+    message: 'You do not have permission to use this file context',
+    statusCode: 403
+  },
 
   // 404 - Not Found
   ROOM_NOT_FOUND: {
@@ -112,6 +137,11 @@ export const ERROR_DEFINITIONS = {
     message: 'Message not found',
     statusCode: 404
   },
+  FILE_CONTEXT_NOT_FOUND: {
+    code: 'FILE_CONTEXT_NOT_FOUND',
+    message: 'File context not found',
+    statusCode: 404
+  },
 
   // 409 - Conflict
   ROOM_NAME_EXISTS: {
@@ -124,6 +154,16 @@ export const ERROR_DEFINITIONS = {
   TAVILY_QUOTA_EXCEEDED: {
     code: 'TAVILY_QUOTA_EXCEEDED',
     message: 'Web search quota exceeded',
+    statusCode: 429
+  },
+  AI_USAGE_LIMIT_REACHED: {
+    code: 'AI_USAGE_LIMIT_REACHED',
+    message: 'AI usage limit reached for current period',
+    statusCode: 429
+  },
+  FILE_PROCESS_RATE_LIMIT_REACHED: {
+    code: 'FILE_PROCESS_RATE_LIMIT_REACHED',
+    message: 'File processing rate limit exceeded. Please wait and try again.',
     statusCode: 429
   },
 

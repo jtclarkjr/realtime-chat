@@ -14,15 +14,30 @@ import type { PresenceState } from '@/lib/types/presence'
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore
 } from 'react'
 import { track } from '@vercel/analytics/react'
 import { toast } from 'sonner'
+import { processAiFiles } from '@/lib/api/client'
+import { useUpdatePersonalChat } from '@/lib/query/mutations'
+import {
+  MAX_ATTACHMENT_FILE_BYTES,
+  MAX_PERSONAL_ATTACHMENTS,
+  PERSONAL_ATTACHMENT_ACCEPT
+} from '@/lib/constants/attachments'
+import {
+  normalizePersonalAIModel,
+  toManualAIModel
+} from '@/lib/constants/ai-models'
+import type { PersonalAIModelValue } from '@/lib/types/ai-models'
+import { useUIStore } from '@/lib/stores/ui-store'
 
 interface RealtimeChatProps {
   roomId: string
+  mode?: 'group' | 'personal'
   username: string
   userId: string
   userAvatarUrl?: string
@@ -30,6 +45,20 @@ interface RealtimeChatProps {
   messages?: ChatMessage[]
   onPresenceChange?: (users: PresenceState) => void
   isAnonymous?: boolean
+  initialAIEnabled?: boolean
+  allowPrivateAI?: boolean
+  personalAIModel?: string | null
+  pendingInitialAI?: {
+    content: string
+    triggerMessageId?: string
+    fileContextId?: string
+    requiresFileContext?: boolean
+  } | null
+}
+
+type AttachmentSelection = {
+  id: string
+  file: File
 }
 
 const subscribeNoop = () => () => {}
@@ -44,16 +73,25 @@ const subscribeNoop = () => () => {}
  */
 export const RealtimeChat = ({
   roomId,
+  mode = 'group',
   username,
   userId,
   userAvatarUrl,
   onMessage,
   messages: initialMessages = [],
   onPresenceChange,
-  isAnonymous = false
+  isAnonymous = false,
+  initialAIEnabled = false,
+  allowPrivateAI = true,
+  personalAIModel = null,
+  pendingInitialAI = null
 }: RealtimeChatProps) => {
   const { containerRef, scrollToBottom, scrollToBottomInstant } =
     useChatScroll()
+  const clearPendingPersonalAI = useUIStore(
+    (state) => state.clearPendingPersonalAI
+  )
+  const updatePersonalChatMutation = useUpdatePersonalChat()
 
   const {
     streamingMessages,
@@ -123,6 +161,9 @@ export const RealtimeChat = ({
     isAIPrivate,
     setIsAIPrivate,
     isAILoading,
+    isAILocked,
+    aiUsageNearLimitNotice,
+    aiLockReason,
     sendAIMessage,
     generateReplyDraft
   } = useAIChat({
@@ -142,14 +183,24 @@ export const RealtimeChat = ({
 
       // For public messages, the broadcast will eventually replace this
       // For private messages, this stays permanently
-    }
+    },
+    initialAIEnabled,
+    allowPrivateMessages: allowPrivateAI,
+    isAnonymous
   })
 
   const [newMessage, setNewMessage] = useState<string>('')
+  const [selectedModel, setSelectedModel] = useState<PersonalAIModelValue>(
+    normalizePersonalAIModel(personalAIModel)
+  )
+  const [attachmentFiles, setAttachmentFiles] = useState<AttachmentSelection[]>(
+    []
+  )
   const [replyingMessageId, setReplyingMessageId] = useState<string | null>(
     null
   )
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const pendingInitialAIRunRef = useRef<string | null>(null)
   const hasHydrated = useSyncExternalStore(
     subscribeNoop,
     () => true,
@@ -179,6 +230,222 @@ export const RealtimeChat = ({
   })
 
   const effectiveIsConnected = hasHydrated ? isConnected : true
+  const attachmentEnabled = mode === 'personal'
+  const attachmentDisabled = !effectiveIsConnected || loading || isAILoading
+  const attachmentChips = useMemo(
+    () =>
+      attachmentFiles.map((entry) => ({
+        id: entry.id,
+        name: entry.file.name
+      })),
+    [attachmentFiles]
+  )
+  const modelSelectorDisabled =
+    mode === 'personal' &&
+    (!initialAIEnabled || updatePersonalChatMutation.isPending || isAILocked)
+  let modelSelectorNotice: string | undefined
+  if (mode === 'personal') {
+    modelSelectorNotice = isAILocked
+      ? 'Limit has been hit.'
+      : aiUsageNearLimitNotice
+  }
+  const modelSelectorNoticeTone = isAILocked ? 'destructive' : 'warning'
+  const standardAINotice =
+    mode === 'personal' ? undefined : aiLockReason || aiUsageNearLimitNotice
+  let standardAINoticeTone: 'warning' | 'destructive' | undefined
+  if (mode !== 'personal') {
+    standardAINoticeTone = isAILocked ? 'destructive' : 'warning'
+  }
+
+  useEffect(() => {
+    if (mode !== 'personal') {
+      return
+    }
+
+    setSelectedModel(normalizePersonalAIModel(personalAIModel))
+  }, [mode, personalAIModel, roomId])
+
+  useEffect(() => {
+    setAttachmentFiles([])
+    pendingInitialAIRunRef.current = null
+  }, [mode, roomId])
+
+  const clearAttachmentFiles = useCallback(() => {
+    setAttachmentFiles([])
+  }, [])
+
+  const handleSelectAttachmentFiles = useCallback(
+    (files: FileList | null) => {
+      if (!files || mode !== 'personal') {
+        return
+      }
+
+      setAttachmentFiles((current) => {
+        const next = [...current]
+
+        for (const file of Array.from(files)) {
+          if (file.size > MAX_ATTACHMENT_FILE_BYTES) {
+            toast.error(`${file.name} exceeds the 20 MB per-file limit`)
+            continue
+          }
+
+          if (next.length >= MAX_PERSONAL_ATTACHMENTS) {
+            toast.error(
+              `You can attach up to ${MAX_PERSONAL_ATTACHMENTS} files`
+            )
+            break
+          }
+
+          const duplicate = next.some(
+            (entry) =>
+              entry.file.name === file.name &&
+              entry.file.size === file.size &&
+              entry.file.lastModified === file.lastModified
+          )
+          if (duplicate) {
+            continue
+          }
+
+          next.push({
+            id: crypto.randomUUID(),
+            file
+          })
+        }
+
+        return next
+      })
+    },
+    [mode]
+  )
+
+  const handleRemoveAttachmentFile = useCallback((fileId: string) => {
+    setAttachmentFiles((current) =>
+      current.filter((attachment) => attachment.id !== fileId)
+    )
+  }, [])
+
+  const handleModelChange = useCallback(
+    async (nextModel: PersonalAIModelValue) => {
+      if (mode !== 'personal') {
+        return
+      }
+
+      const previousModel = selectedModel
+      setSelectedModel(nextModel)
+
+      try {
+        await updatePersonalChatMutation.mutateAsync({
+          chatId: roomId,
+          data: {
+            aiModel: toManualAIModel(nextModel) ?? null
+          }
+        })
+      } catch (error) {
+        setSelectedModel(previousModel)
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to update AI model'
+        )
+      }
+    },
+    [mode, roomId, selectedModel, updatePersonalChatMutation]
+  )
+
+  const processAttachments = useCallback(async (): Promise<
+    string | undefined
+  > => {
+    if (!attachmentFiles.length) {
+      return undefined
+    }
+
+    if (mode !== 'personal') {
+      toast.error('Attachments are only available in personal chats')
+      throw new Error('attachments_not_allowed')
+    }
+
+    if (!effectiveIsConnected) {
+      toast.error('Attachments can only be sent while online')
+      throw new Error('attachments_offline')
+    }
+
+    if (!isAIEnabled) {
+      toast.error(
+        aiLockReason || 'Enable AI to include attachments in your request'
+      )
+      throw new Error('attachments_require_ai')
+    }
+
+    const formData = new FormData()
+    formData.append('channelId', roomId)
+    attachmentFiles.forEach((entry) => {
+      formData.append('files', entry.file, entry.file.name)
+    })
+
+    const result = await processAiFiles(formData)
+    if (result.rejectedFiles.length > 0) {
+      toast.error(
+        `${result.rejectedFiles.length} file(s) were rejected by the server`
+      )
+    }
+
+    return result.fileContextId
+  }, [
+    aiLockReason,
+    attachmentFiles,
+    effectiveIsConnected,
+    isAIEnabled,
+    mode,
+    roomId
+  ])
+
+  useEffect(() => {
+    if (
+      !pendingInitialAI ||
+      isAnonymous ||
+      isAILoading ||
+      isAILocked ||
+      (mode === 'personal' && !initialAIEnabled)
+    ) {
+      return
+    }
+
+    if (
+      pendingInitialAI.requiresFileContext &&
+      !pendingInitialAI.fileContextId
+    ) {
+      return
+    }
+
+    const pendingKey = `${roomId}:${pendingInitialAI.triggerMessageId || pendingInitialAI.content}:${pendingInitialAI.fileContextId || 'no-file-context'}`
+    if (pendingInitialAIRunRef.current === pendingKey) {
+      return
+    }
+
+    pendingInitialAIRunRef.current = pendingKey
+    void sendAIMessage(
+      pendingInitialAI.content,
+      allMessages.filter((message) => !message.isDeleted).slice(-10),
+      pendingInitialAI.triggerMessageId,
+      pendingInitialAI.fileContextId
+    )
+      .then(() => {
+        clearPendingPersonalAI(roomId)
+      })
+      .catch((error) => {
+        pendingInitialAIRunRef.current = null
+        console.error('Failed to auto-start personal AI response:', error)
+      })
+  }, [
+    allMessages,
+    clearPendingPersonalAI,
+    isAILocked,
+    isAILoading,
+    isAnonymous,
+    initialAIEnabled,
+    mode,
+    pendingInitialAI,
+    roomId,
+    sendAIMessage
+  ])
   // Handle clearing streaming messages when broadcast arrives
   useEffect(() => {
     streamingMessages.forEach((streamingMessage) => {
@@ -223,31 +490,49 @@ export const RealtimeChat = ({
       if (!newMessage.trim() || loading || isAILoading) return
 
       const messageContent = newMessage.trim()
+      let fileContextId: string | undefined
+
+      try {
+        fileContextId = await processAttachments()
+      } catch {
+        return
+      }
+
       setNewMessage('')
 
       if (isAIEnabled) {
-        // First send the user's message (private if AI is in private mode)
-        const triggerMessageId = await sendMessage(messageContent, isAIPrivate)
+        const triggerMessageId = await sendMessage(
+          messageContent,
+          mode === 'personal' ? false : isAIPrivate
+        )
         // Then send to AI for response with recent messages as context
         // Pass the trigger message ID so it can be marked as having an AI response
         await sendAIMessage(
           messageContent,
-          allMessages.slice(-10),
-          triggerMessageId || undefined
+          allMessages.filter((message) => !message.isDeleted).slice(-10),
+          triggerMessageId || undefined,
+          fileContextId
         )
 
-        if (isAIPrivate) {
+        if (fileContextId) {
+          clearAttachmentFiles()
+        }
+
+        if (mode !== 'personal' && isAIPrivate) {
           track('event_ai_private_message_sent')
-        } else {
+        } else if (mode !== 'personal') {
           track('event_ai_public_message_sent')
         }
       } else {
         // Send regular message
-        sendMessage(messageContent)
+        await sendMessage(messageContent)
       }
     },
     [
       newMessage,
+      mode,
+      processAttachments,
+      clearAttachmentFiles,
       setNewMessage,
       sendMessage,
       sendAIMessage,
@@ -300,7 +585,9 @@ export const RealtimeChat = ({
         inputRef.current?.focus()
       } catch (error) {
         console.error('Failed to generate AI reply:', error)
-        toast.error('Failed to generate AI reply')
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to generate AI reply'
+        )
         throw error
       } finally {
         setReplyingMessageId(null)
@@ -330,7 +617,7 @@ export const RealtimeChat = ({
         onRetry={retryMessage}
         onUnsend={unsendMessage}
         isUnsending={isUnsending}
-        onReplyWithAI={handleReplyWithAI}
+        onReplyWithAI={isAILocked ? undefined : handleReplyWithAI}
         isReplyingWithAI={isReplyingWithAI}
         onUserScroll={handleUserScroll}
         isAnonymous={isAnonymous}
@@ -343,6 +630,7 @@ export const RealtimeChat = ({
       />
 
       <ChatInput
+        mode={mode}
         newMessage={newMessage}
         setNewMessage={setNewMessage}
         onSendMessage={handleSendMessage}
@@ -354,7 +642,24 @@ export const RealtimeChat = ({
         setIsAIPrivate={setIsAIPrivate}
         isAILoading={isAILoading}
         isAnonymous={isAnonymous}
+        allowPrivateAI={allowPrivateAI}
         inputRef={inputRef}
+        isAILocked={isAILocked}
+        aiLockReason={aiLockReason}
+        aiNotice={standardAINotice}
+        aiNoticeTone={standardAINoticeTone}
+        selectedModel={mode === 'personal' ? selectedModel : undefined}
+        modelSelectorDisabled={modelSelectorDisabled}
+        modelSelectorNotice={modelSelectorNotice}
+        modelSelectorNoticeTone={modelSelectorNoticeTone}
+        onModelChange={handleModelChange}
+        attachmentEnabled={attachmentEnabled}
+        attachmentDisabled={attachmentDisabled}
+        attachmentAccept={PERSONAL_ATTACHMENT_ACCEPT}
+        attachmentMaxFiles={MAX_PERSONAL_ATTACHMENTS}
+        attachmentChips={attachmentChips}
+        onSelectAttachmentFiles={handleSelectAttachmentFiles}
+        onRemoveAttachmentFile={handleRemoveAttachmentFile}
       />
     </div>
   )

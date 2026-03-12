@@ -4,15 +4,24 @@ import { RoomList } from './room-list'
 import { UserSection } from './user-section'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Home } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { useUIStore } from '@/lib/stores/ui-store'
 import { cn } from '@/lib/utils'
-import type { DatabaseRoom } from '@/lib/types/database'
+import type {
+  DatabaseRoom,
+  GroupView,
+  PersonalChat
+} from '@/lib/types/database'
+import type { SidebarSection } from '@/lib/types/ui'
 import type { PublicUser } from '@/lib/types/user'
+import { useActiveRoomId } from '@/hooks/use-active-room-id'
 
 interface SidebarProps {
   user: PublicUser
-  initialRooms: DatabaseRoom[]
+  initialGroups: GroupView[]
+  initialGroupChannels: DatabaseRoom[]
+  initialPersonalChats: PersonalChat[]
   initialDefaultRoomId: string | null
   collapsed: boolean
   onNavigate?: () => void
@@ -20,17 +29,81 @@ interface SidebarProps {
 
 export function Sidebar({
   user,
-  initialRooms,
+  initialGroups,
+  initialGroupChannels,
+  initialPersonalChats,
   collapsed,
   onNavigate
 }: SidebarProps) {
-  const params = useParams()
   const router = useRouter()
-  const { toggleSidebar } = useUIStore()
-  const activeRoomId = params?.id as string | undefined
+  const params = useParams()
+  const pathname = usePathname()
+  const activeRoomId = useActiveRoomId()
+  const {
+    toggleSidebar,
+    sidebarSection,
+    setSidebarSection,
+    openExpandedGroup,
+    hasHydrated
+  } = useUIStore()
+
+  const activeGroupId = params?.groupId as string | undefined
+  let routeSidebarSection: SidebarSection | null = null
+  if (pathname.startsWith('/personal')) {
+    routeSidebarSection = 'personal'
+  } else if (pathname.startsWith('/group')) {
+    routeSidebarSection = 'groups'
+  }
+  const effectiveSidebarSection = user.isAnonymous
+    ? 'groups'
+    : routeSidebarSection || (hasHydrated ? sidebarSection : 'groups')
+
+  useEffect(() => {
+    if (pathname.startsWith('/personal')) {
+      setSidebarSection('personal')
+    } else if (pathname.startsWith('/group')) {
+      setSidebarSection('groups')
+    }
+  }, [pathname, setSidebarSection])
+
+  useEffect(() => {
+    if (!pathname.startsWith('/group/') || !activeGroupId) {
+      return
+    }
+
+    openExpandedGroup(activeGroupId)
+  }, [activeGroupId, openExpandedGroup, pathname])
+
+  useEffect(() => {
+    if (!hasHydrated || user.isAnonymous) {
+      return
+    }
+
+    if (sidebarSection === 'personal' && pathname === '/') {
+      router.replace('/personal')
+      onNavigate?.()
+    }
+  }, [
+    hasHydrated,
+    onNavigate,
+    pathname,
+    router,
+    sidebarSection,
+    user.isAnonymous
+  ])
 
   const handleHomeClick = () => {
-    router.push('/')
+    router.push(effectiveSidebarSection === 'personal' ? '/personal' : '/')
+    onNavigate?.()
+  }
+
+  const handleSectionChange = (section: SidebarSection) => {
+    setSidebarSection(section)
+    if (section === 'personal') {
+      router.push('/personal')
+    } else if (pathname.startsWith('/personal')) {
+      router.push('/')
+    }
     onNavigate?.()
   }
 
@@ -108,9 +181,13 @@ export function Sidebar({
       {/* Room list */}
       <RoomList
         activeRoomId={activeRoomId || null}
+        activeSection={effectiveSidebarSection}
         collapsed={collapsed}
-        initialRooms={initialRooms}
+        initialGroups={initialGroups}
+        initialGroupChannels={initialGroupChannels}
+        initialPersonalChats={initialPersonalChats}
         user={user}
+        onSectionChange={handleSectionChange}
         onNavigate={onNavigate}
       />
 
@@ -118,7 +195,8 @@ export function Sidebar({
       <UserSection
         user={user}
         collapsed={collapsed}
-        initialRooms={initialRooms}
+        initialGroups={initialGroups}
+        initialPersonalChats={initialPersonalChats}
       />
     </nav>
   )

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMissedMessages } from '@/lib/services/chat'
 import { withAuth, validateUserAccess } from '@/lib/auth/middleware'
+import { resolveRoomAccess } from '@/lib/services/domain'
 
 interface RouteParams {
   params: Promise<{
@@ -27,6 +28,14 @@ export const POST = withAuth(
         return NextResponse.json(
           { error: 'You can only get missed messages for yourself' },
           { status: 403 }
+        )
+      }
+
+      const access = await resolveRoomAccess(roomId, user)
+      if (!access.canRead) {
+        return NextResponse.json(
+          { error: 'Channel not found or unauthorized' },
+          { status: 404 }
         )
       }
 
@@ -63,6 +72,14 @@ export const GET = withAuth(
         return NextResponse.json(
           { error: 'You can only get missed messages for yourself' },
           { status: 403 }
+        )
+      }
+
+      const access = await resolveRoomAccess(roomId, user)
+      if (!access.canRead) {
+        return NextResponse.json(
+          { error: 'Channel not found or unauthorized' },
+          { status: 404 }
         )
       }
 

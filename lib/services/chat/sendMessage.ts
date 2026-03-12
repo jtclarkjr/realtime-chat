@@ -2,15 +2,18 @@ import { getServiceClient } from '@/lib/supabase/server'
 import { getUserDisplayNameById, insertMessage } from '@/lib/supabase/db/chat'
 import { userService } from '@/lib/services/user/user-service'
 import { trackLatestMessage } from '@/lib/redis'
+import { resolveRoomAccess, touchRoomLastActivity } from '@/lib/services/domain'
 import type {
   DatabaseMessageInsert,
   ChatMessageWithDB,
   SendMessageRequest
 } from '@/lib/types/database'
+import type { User } from '@supabase/supabase-js'
 import { transformDatabaseMessage } from './transformDatabaseMessage'
 
 export const sendMessage = async (
-  request: SendMessageRequest
+  request: SendMessageRequest,
+  viewer?: User
 ): Promise<ChatMessageWithDB> => {
   // Validate required fields
   if (!request.roomId || !request.userId || !request.content?.trim()) {
@@ -18,12 +21,23 @@ export const sendMessage = async (
   }
 
   // Save to database (id will be auto-generated)
+  const roomAccess = viewer
+    ? await resolveRoomAccess(request.roomId, viewer, {
+        autoJoinForWrite: true
+      })
+    : null
+  if (roomAccess && !roomAccess.canWrite) {
+    throw new Error('You do not have permission to send messages in this room')
+  }
+
+  const effectiveIsPrivate =
+    roomAccess?.room.kind === 'personal' ? false : (request.isPrivate ?? false)
   const messageInsert: DatabaseMessageInsert = {
     room_id: request.roomId,
     user_id: request.userId,
     content: request.content,
     is_ai_message: false,
-    is_private: request.isPrivate || false
+    is_private: effectiveIsPrivate
   }
 
   let message
@@ -43,6 +57,7 @@ export const sendMessage = async (
 
   // Track this as the latest message in Redis
   await trackLatestMessage(request.roomId, message.id)
+  await touchRoomLastActivity(request.roomId)
 
   return transformDatabaseMessage(message, userProfile?.avatar_url, userName)
 }

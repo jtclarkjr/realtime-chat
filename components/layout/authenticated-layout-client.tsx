@@ -1,7 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
 import { Sidebar } from './sidebar'
-import { TopBar } from './top-bar'
+import { MobileSidebarToggle } from './mobile-sidebar-toggle'
 import { UnreadMessageTracker } from './unread-message-tracker'
 import { AnonymousBanner } from '@/components/anonymous-banner'
 import { useUIStore } from '@/lib/stores/ui-store'
@@ -14,20 +15,30 @@ import {
 import { usePathname } from 'next/navigation'
 import { RoomsRealtimeSync } from './rooms-realtime-sync'
 import { AuthenticatedUserProvider } from './authenticated-user-context'
-import type { DatabaseRoom } from '@/lib/types/database'
+import { NavigationDialogs } from './navigation-dialogs'
+import type {
+  DatabaseRoom,
+  GroupView,
+  PersonalChat
+} from '@/lib/types/database'
 import type { PublicUser } from '@/lib/types/user'
 import { cn } from '@/lib/utils'
+import { getConversationRouteContextFromPathname } from '@/lib/utils/chat-routes'
 
 interface AuthenticatedLayoutClientProps {
   user: PublicUser
-  initialRooms: DatabaseRoom[]
+  initialGroups: GroupView[]
+  initialGroupChannels: DatabaseRoom[]
+  initialPersonalChats: PersonalChat[]
   initialDefaultRoomId: string | null
   children: React.ReactNode
 }
 
 export function AuthenticatedLayoutClient({
   user,
-  initialRooms,
+  initialGroups,
+  initialGroupChannels,
+  initialPersonalChats,
   initialDefaultRoomId,
   children
 }: AuthenticatedLayoutClientProps) {
@@ -41,8 +52,11 @@ export function AuthenticatedLayoutClient({
   const effectiveSidebarCollapsed = hasHydrated ? sidebarCollapsed : false
   const effectiveMobileDrawerOpen = hasHydrated ? mobileDrawerOpen : false
 
-  const segments = pathname.split('/').filter(Boolean)
-  const roomId = segments[0] === 'room' ? segments[1] : null
+  useEffect(() => {
+    void useUIStore.persist.rehydrate()
+  }, [])
+
+  const { roomId } = getConversationRouteContextFromPathname(pathname)
   const announcement = roomId
     ? `Navigated to room ${roomId}`
     : 'Navigated to dashboard'
@@ -52,6 +66,8 @@ export function AuthenticatedLayoutClient({
       <div className="h-dvh flex flex-col w-full">
         <RoomsRealtimeSync userId={user.id} />
         <UnreadMessageTracker userId={user.id} />
+        <NavigationDialogs initialGroups={initialGroups} />
+        <MobileSidebarToggle />
         {user.isAnonymous && <AnonymousBanner />}
 
         <div className="flex-1 flex overflow-hidden">
@@ -64,7 +80,9 @@ export function AuthenticatedLayoutClient({
           >
             <Sidebar
               user={user}
-              initialRooms={initialRooms}
+              initialGroups={initialGroups}
+              initialGroupChannels={initialGroupChannels}
+              initialPersonalChats={initialPersonalChats}
               initialDefaultRoomId={initialDefaultRoomId}
               collapsed={effectiveSidebarCollapsed}
             />
@@ -82,7 +100,9 @@ export function AuthenticatedLayoutClient({
               </SheetDescription>
               <Sidebar
                 user={user}
-                initialRooms={initialRooms}
+                initialGroups={initialGroups}
+                initialGroupChannels={initialGroupChannels}
+                initialPersonalChats={initialPersonalChats}
                 initialDefaultRoomId={initialDefaultRoomId}
                 collapsed={false}
                 onNavigate={() => setMobileDrawerOpen(false)}
@@ -92,7 +112,6 @@ export function AuthenticatedLayoutClient({
 
           {/* Main Content Area */}
           <main className="flex-1 flex flex-col overflow-hidden">
-            <TopBar user={user} initialRooms={initialRooms} />
             <div className="flex-1 overflow-hidden">{children}</div>
           </main>
         </div>

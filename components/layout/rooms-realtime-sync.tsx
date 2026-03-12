@@ -15,21 +15,31 @@ export function RoomsRealtimeSync({ userId }: RoomsRealtimeSyncProps) {
 
   useEffect(() => {
     const supabase = supabaseRef.current
-    const channel = supabase
-      .channel(`rooms-sync-${userId}`)
-      .on(
+    const invalidateCatalog = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.rooms.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups.all })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.personalChats.all
+      })
+    }
+
+    const channel = supabase.channel(`rooms-sync-${userId}`)
+
+    ;(
+      ['rooms', 'groups', 'group_memberships', 'room_memberships'] as const
+    ).forEach((table) => {
+      channel.on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'rooms'
+          table
         },
-        () => {
-          // Refetch all room queries when rooms are created, updated, or deleted.
-          void queryClient.invalidateQueries({ queryKey: queryKeys.rooms.all })
-        }
+        invalidateCatalog
       )
-      .subscribe()
+    })
+
+    channel.subscribe()
 
     return () => {
       supabase.removeChannel(channel)

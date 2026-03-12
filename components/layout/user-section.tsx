@@ -10,32 +10,36 @@ import {
 import { Button } from '@/components/ui/button'
 import { LogOut, Settings, Bell } from 'lucide-react'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { PublicUser } from '@/lib/types/user'
 import { cn } from '@/lib/utils'
 import { useNetworkConnectivity } from '@/hooks/connection/use-network-connectivity'
 import { NotificationDropdown } from './notification-dropdown'
-import type { DatabaseRoom } from '@/lib/types/database'
+import type { GroupView, PersonalChat } from '@/lib/types/database'
 import { useUIStore } from '@/lib/stores/ui-store'
 import { signOutViaLogoutRoute } from '@/lib/auth/client'
 
 interface UserSectionProps {
   user: PublicUser
   collapsed: boolean
-  initialRooms: DatabaseRoom[]
+  initialGroups: GroupView[]
+  initialPersonalChats: PersonalChat[]
 }
 
 export function UserSection({
   user,
   collapsed,
-  initialRooms
+  initialGroups,
+  initialPersonalChats
 }: UserSectionProps) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const { isOnline } = useNetworkConnectivity()
   const { unreadCounts, hasHydrated } = useUIStore()
   const effectiveOnline = hasHydrated ? isOnline : true
 
   const totalUnread = hasHydrated
-    ? Object.values(unreadCounts).reduce((sum, count) => sum + count, 0)
+    ? Object.values(unreadCounts).reduce<number>((sum, count) => sum + count, 0)
     : 0
 
   let presenceLabel = 'Offline'
@@ -135,14 +139,19 @@ export function UserSection({
 
               <div className="border-t border-border mb-2" />
 
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-2"
-                disabled
-              >
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </Button>
+              {!user.isAnonymous && (
+                <Button
+                  variant="ghost"
+                  className="w-full cursor-pointer justify-start gap-2"
+                  onClick={() => {
+                    setOpen(false)
+                    router.push('/settings')
+                  }}
+                >
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                </Button>
+              )}
 
               <div className="flex items-center gap-2 px-2 py-1.5">
                 <span className="text-sm text-muted-foreground">Theme</span>
@@ -168,7 +177,11 @@ export function UserSection({
         )}
 
         {hasHydrated ? (
-          <NotificationDropdown initialRooms={initialRooms}>
+          <NotificationDropdown
+            initialGroups={initialGroups}
+            initialPersonalChats={initialPersonalChats}
+            includePersonalChats={!user.isAnonymous}
+          >
             <Button
               variant="ghost"
               size="icon"
