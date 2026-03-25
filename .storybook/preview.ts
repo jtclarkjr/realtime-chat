@@ -1,5 +1,5 @@
-import type { Preview } from '@storybook/nextjs'
-// @ts-expect-error - CSS imports are handled by webpack
+import type { Preview } from '@storybook/nextjs-vite'
+// @ts-expect-error - Storybook handles CSS imports during bundling
 import '../app/globals.css'
 
 const preview: Preview = {
