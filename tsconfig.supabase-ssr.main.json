@@ -1,6 +1,8 @@
 {
   "extends": "./node_modules/@supabase/ssr/tsconfig.main.json",
   "compilerOptions": {
+    "rootDir": "./node_modules/@supabase/ssr/src",
+    "types": ["node"],
     "outDir": "./node_modules/@supabase/ssr/dist/main"
   },
   "include": ["./node_modules/@supabase/ssr/src/**/*.ts"],
