@@ -6,7 +6,7 @@ Features instant messaging, message persistence, and reconnection handling.
 [Live Demo](https://tessuract.dev)
 
 Note: Live demo is from differnt repos (private) with a frontend/backend split
-infrastrucutre but functionality is the same up (groups only is the same)
+infrastrucutre but functionality is the same
 
 Why the split? Self managed vs managed services (i.e. Supabase, Vercel, etc)
 
