@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
-import { AIBadge } from '../ai-badge'
+import { AIBadge } from '@/components/ui/ai-badge'
 
 const meta = {
   title: 'UI/AIBadge',
