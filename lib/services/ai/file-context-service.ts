@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import mammoth from 'mammoth'
-import { PDFParse } from 'pdf-parse'
 import { AI_STREAM_MODEL } from '@/lib/ai/constants'
 import {
   FILE_CONTEXT_TTL_MS,
@@ -10,7 +9,8 @@ import {
   MAX_EXTRACTED_CHARS_PER_FILE,
   MAX_EXTRACTED_CHARS_TOTAL,
   MAX_PERSONAL_ATTACHMENTS,
-  MAX_TOTAL_ATTACHMENT_BYTES
+  MAX_TOTAL_ATTACHMENT_BYTES,
+  PDF_ATTACHMENTS_DISABLED_MESSAGE
 } from '@/lib/constants/attachments'
 import type { ErrorCode } from '@/lib/errors'
 import { getServiceClient } from '@/lib/supabase/server'
@@ -27,7 +27,7 @@ type UploadedFileInput = {
   bytes: Buffer
 }
 
-type AllowedKind = 'image' | 'pdf' | 'text' | 'docx'
+type AllowedKind = 'image' | 'text' | 'docx'
 
 type StoredAcceptedFile = ProcessAiFilesAcceptedFile & {
   extractedText: string
@@ -135,13 +135,10 @@ const detectAllowedKind = (
   const ext = getExtension(fileName)
   const supplied = contentType?.split(';')[0]?.trim().toLowerCase()
 
-  if (ext === 'pdf') {
-    if (isPdfSignature(bytes)) {
-      return 'pdf'
-    }
+  if (ext === 'pdf' || supplied === 'application/pdf') {
     throw new FileContextServiceError(
-      'FILE_PROCESSING_FAILED',
-      'PDF content signature mismatch'
+      'UNSUPPORTED_FILE_TYPE',
+      PDF_ATTACHMENTS_DISABLED_MESSAGE
     )
   }
 
@@ -215,7 +212,6 @@ const inferMediaType = (
     if (ext === 'webp') return 'image/webp'
     return 'image/jpeg'
   }
-  if (kind === 'pdf') return 'application/pdf'
   if (kind === 'docx') {
     return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   }
@@ -246,16 +242,6 @@ const sanitizeExtractedText = (input: string): string => {
   }
 
   return cleaned.trim()
-}
-
-const extractPdfText = async (bytes: Buffer): Promise<string> => {
-  const parser = new PDFParse({ data: new Uint8Array(bytes) })
-  try {
-    const result = await parser.getText()
-    return result.text
-  } finally {
-    await parser.destroy().catch(() => undefined)
-  }
 }
 
 const extractDocxText = async (bytes: Buffer): Promise<string> => {
@@ -340,9 +326,6 @@ const extractForKind = async (
 ): Promise<string> => {
   if (kind === 'text') {
     return bytes.toString('utf8')
-  }
-  if (kind === 'pdf') {
-    return extractPdfText(bytes)
   }
   if (kind === 'docx') {
     return extractDocxText(bytes)

@@ -7,5 +7,11 @@ export const FILE_PROCESS_RATE_MAX_REQUESTS = 25
 export const MAX_EXTRACTED_CHARS_PER_FILE = 12_000
 export const MAX_EXTRACTED_CHARS_TOTAL = 40_000
 
+export const PDF_ATTACHMENTS_DISABLED_MESSAGE =
+  'PDF attachments are temporarily disabled'
+
 export const PERSONAL_ATTACHMENT_ACCEPT =
-  '.png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.md,.csv,.docx'
+  '.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.docx'
+
+export const isPdfAttachment = (file: Pick<File, 'name' | 'type'>): boolean =>
+  file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')

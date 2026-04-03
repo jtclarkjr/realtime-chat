@@ -14,7 +14,9 @@ import {
 import {
   MAX_ATTACHMENT_FILE_BYTES,
   MAX_PERSONAL_ATTACHMENTS,
-  PERSONAL_ATTACHMENT_ACCEPT
+  PDF_ATTACHMENTS_DISABLED_MESSAGE,
+  PERSONAL_ATTACHMENT_ACCEPT,
+  isPdfAttachment
 } from '@/lib/constants/attachments'
 import {
   PERSONAL_AI_MODEL_AUTO,
@@ -62,6 +64,11 @@ export function PersonalStartComposer() {
     setAttachmentFiles((current) => {
       const next = [...current]
       for (const file of Array.from(files)) {
+        if (isPdfAttachment(file)) {
+          toast.error(`${file.name}: ${PDF_ATTACHMENTS_DISABLED_MESSAGE}`)
+          continue
+        }
+
         if (file.size > MAX_ATTACHMENT_FILE_BYTES) {
           toast.error(`${file.name} exceeds the 20 MB per-file limit`)
           continue
