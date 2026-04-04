@@ -8,7 +8,7 @@ Features instant messaging, message persistence, and reconnection handling.
 Note: Live demo is from differnt repos (private) with a frontend/backend split
 infrastrucutre but functionality is the same
 
-Why the split? Self managed vs managed services (i.e. Supabase, Vercel, etc)
+Why the split? Self hosted vs managed services (i.e. Supabase, Vercel, etc)
 
 ## Features
 
