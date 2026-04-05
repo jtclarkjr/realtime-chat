@@ -387,21 +387,9 @@ Used for:
 
 To test real-time functionality:
 
-1. Start multiple development instances:
+1. Run Docker
 
-```bash
-# Terminal 1
-bun run dev:instance1
-
-# Terminal 2
-bun run dev:instance2
-```
-
-2. Open both URLs:
-   - http://localhost:3000
-   - http://localhost:3001
-
-3. Join the same room with different usernames to test real-time messaging.
+2. Two different clients/browsers with two different registered users
 
 ## Redis Commander (Debug Mode)
 
