@@ -349,9 +349,7 @@ Interactive Swagger/OpenAPI documentation is available at:
 
 ### Development
 
-- `bun run dev` - Start development server with Turbopack
-- `bun run dev:instance1` - Start on port 3000 (for testing multiple instances)
-- `bun run dev:instance2` - Start on port 3001 (for testing multiple instances)
+- `bun dev` - Start development server with Turbopack
 
 ### Build & Production
 
