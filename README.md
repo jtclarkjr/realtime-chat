@@ -6,9 +6,10 @@ Features instant messaging, message persistence, and reconnection handling.
 [Live Demo](https://tessuract.dev)
 
 Note: Live demo is from differnt repos (private) with a frontend/backend split
-infrastrucutre but functionality is the same
+infrastrucutre but functionality is the same. Guest user only see public groups. User can see everything including personal chats with AI chatbot (uses a custom built AI Agent based on [agents from scratch](https://github.com/pguso/agents-from-scratch))
 
-Why the split? Self hosted vs managed services (i.e. Supabase, Vercel, etc)
+Why the split? Self managed vs managed services (i.e. Supabase, Vercel, etc)
+This way can control where to deploy as websocket/ SSE server doesnt work on serverless and can decouple AI Agent to its own service
 
 ## Features
 
