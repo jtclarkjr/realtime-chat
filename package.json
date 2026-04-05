@@ -4,8 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "bun run --bun next dev",
-    "dev:instance1": "bun run --bun next dev -p 3000",
-    "dev:instance2": "bun run --bun next dev -p 3001",
     "build": "bun run --bun next build",
     "build:app": "next build",
     "start": "next start",
