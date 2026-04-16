@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
-import { SpeedInsights } from '@vercel/speed-insights/next'
+import { AnalyticsProvider } from '@/components/providers/analytics-provider'
 import { ThemeProvider } from '@/components/theme-provider'
 import { QueryProvider } from '@/components/providers/query-provider'
 import { Toaster } from '@/components/ui/sonner'
@@ -41,8 +40,6 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const isDev = process.env.ENV === 'dev'
-
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -54,12 +51,7 @@ export default function RootLayout({
             <Toaster />
           </ThemeProvider>
         </QueryProvider>
-        {!isDev && (
-          <>
-            <Analytics />
-            <SpeedInsights />
-          </>
-        )}
+        <AnalyticsProvider />
       </body>
     </html>
   )
