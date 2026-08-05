@@ -3,7 +3,9 @@
 A modern, real-time chat application built with Next.js, Supabase, and Redis.
 Features instant messaging, message persistence, and reconnection handling.
 
-[Live Demo](https://tessuract.dev)
+Repo is the POC version of the demo that is a split architecture frontend/backend/DB/cloud, each with thier own repo (private) and not as a fullstack application. Reason for this is to decouple and manage backend/infra layer while still being able to make different apps with it like mobile and desktop apps as alternative frontend layer types.
+
+[Demo](https://tessuract.dev)
 
 Note: Live demo is from differnt repos (private) with a frontend/backend split
 infrastrucutre but functionality is the same. Guest user only see public groups.
